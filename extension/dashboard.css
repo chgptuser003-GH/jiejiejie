@@ -131,5 +131,20 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .delete-ads-field textarea { display: block; width: 100%; min-height: 72px; margin-top: 7px; padding: 8px 10px; border: 1px solid #d7dde6; border-radius: 6px; resize: vertical; }
 .delete-ads-layout .group-action-row { margin-top: 12px; }.delete-ads-layout .task-primary-btn { background: #dc3545; }
 .delete-ads-divider { margin: 16px 0; border: 0; border-top: 1px solid #e2e7ee; }
+.output[hidden] { display: none; }.legacy-action-buttons { display: flex; align-items: center; gap: 8px; }
+.preview-delete-button { min-height: 32px; padding: 5px 12px; border: 1px solid #ee4d2d; border-radius: 6px; background: white; color: #d94729; font-weight: 700; }
+.preview-delete-button:disabled { opacity: .6; cursor: wait; }
+.legacy-layout { padding: 16px; }.legacy-layout h3 { margin: 0 0 14px; font-size: 15px; color: #273348; }
+.legacy-layout h4 { margin: 14px 0 8px; font-size: 13px; color: #354157; }
+.legacy-field { display: block; margin-bottom: 14px; color: #354157; font-size: 11px; font-weight: 700; }
+.legacy-field[hidden] { display: none; }
+.legacy-field input, .legacy-field select, .legacy-field textarea { display: block; width: 100%; margin-top: 7px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #25334a; font: inherit; font-weight: 400; }
+.legacy-field input, .legacy-field select { min-height: 36px; }.legacy-field textarea { min-height: 72px; resize: vertical; }
+.legacy-field small { display: block; margin-top: 6px; color: #8a94a4; font-size: 11px; font-weight: 400; }
+.legacy-action { margin-top: 12px; }.legacy-action .task-primary-btn { width: auto; min-width: 84px; min-height: 32px; padding: 5px 12px; }
+.legacy-action .task-primary-btn.secondary { background: #64748b; }.legacy-action .task-primary-btn.warning { background: #e29d1e; }
+.roi-budget-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.roi-budget-columns .legacy-layout { margin-top: 0; }.roi-budget-columns .legacy-action { min-height: 65px; }
+@media (max-width: 1150px) { .roi-budget-columns { grid-template-columns: 1fr; } }
 @media (max-width: 1280px) { .manual-settings-row, .task-choice-grid { grid-template-columns: 1fr; } }
 @media (max-width: 1200px) { .header-context { max-width: 320px; }.header-chip { display: none; }.fixed-panel { width: 320px; } }

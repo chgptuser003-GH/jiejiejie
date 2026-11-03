@@ -4,9 +4,9 @@ export const modules = [
       { id: 'ads-all', name: '全店開啟廣告', status: 'partial', summary: '篩選未投放商品，設定每日預算、目標 ROAS 或自動競價後批量建立。', details: '新增在架商品的只讀投放預覽；活動掃描完整時才標示未出現在活動的商品，庫存與建立資格仍未確認。單件自動競價廣告已實測，全店批量仍未完成。', tool: 'all-ads' },
       { id: 'ads-groups', name: '批量開廣告群組', status: 'mapping', summary: '排除已有廣告或零庫存商品，每 30 件組成一組投放。', details: '官方店鋪 GMV Max 與舊版每 30 件商品一組的語義不同，仍需確認等價 API。' },
       { id: 'ads-cpc', name: 'CPC 監控自動重開', status: 'partial', summary: '按 CPC 閾值監控廣告，延時關閉並重建。', details: '每日與每小時績效 API 適配器已完成；監控排程、數據延遲驗證及安全重開流程尚未完成。', tool: 'performance' },
-      { id: 'ads-delete', name: '批量刪除廣告', status: 'partial', summary: '按指定或排除商品 ID 批量處理進行中廣告。', details: '單件手動選品廣告的刪除 API 已對照；批量預覽、確認及任務紀錄尚未完成。' },
+      { id: 'ads-delete', name: '批量刪除廣告', status: 'partial', summary: '按指定或排除商品 ID 批量處理進行中廣告。', details: '已接入最多 10 頁／1000 活動的只讀刪除範圍預覽，關聯商品不明的活動會排除；真正的批量刪除、逐筆確認及任務紀錄尚未完成。' },
       { id: 'ads-specific', name: '指定商品開廣告', status: 'partial', summary: '對指定商品設定預算、目標 ROAS 和投放模式。', details: '已在沙盒成功建立單件手動選品、平台自動競價廣告。此模式不設定目標 ROAS；批量、其他競價方式與自訂 ROAS 尚未接入。', tool: 'manual-ad' },
-      { id: 'ads-roi', name: '批量修改 ROAS／預算', status: 'partial', summary: '以商品或活動 ID 批量修改目標 ROAS 與每日預算。', details: '沙盒單件廣告的預算修改、暫停和恢復已通過實測；新增最多 10 個活動的批量預算工具，逐個讀回並保留執行記錄，尚待介面實測。auto 競價活動不可直接修改目標 ROAS。', tool: 'manual-edit' },
+      { id: 'ads-roi', name: '批量修改 ROI／預算', status: 'partial', summary: '以商品或活動 ID 批量修改目標 ROAS 與每日預算。', details: '沙盒單件廣告的預算修改、暫停和恢復已通過實測；新增最多 10 個活動的批量預算工具，逐個讀回並保留執行記錄，尚待介面實測。auto 競價活動不可直接修改目標 ROAS。', tool: 'manual-edit' },
       { id: 'ads-boost', name: '加速推廣控制', status: 'mapping', summary: '批量開關手動 ROAS 廣告的加速推廣。', details: '尚未核實官方 API 有與舊版「加速推廣」完全相同的設定。' },
       { id: 'ads-reopen', name: '重開廣告', status: 'partial', summary: '按指定商品延時重開，保留預算和 ROAS 設定。', details: '舊版採刪除再建立，需先完成快照、預覽和失敗恢復，避免投放中斷。' },
       { id: 'ads-filter', name: '批量篩選廣告', status: 'partial', summary: '依曝光、點擊、花費、CPC、ROAS、狀態等條件篩選與匯出。', details: '已接入最多 10 頁、1000 個活動的只讀篩選與 CSV 匯出，支援日期、狀態、商品 ID、點擊、CPC、花費與 ROAS；掃描未完成時不提供匯出。任一條件組合、加速狀態及刪除尚未完成。', tool: 'ad-filter' },
@@ -20,7 +20,7 @@ export const modules = [
   },
   {
     id: 'products', name: '商品管理', icon: '📦', features: [
-      { id: 'products-bulk', name: '批量商品操作', status: 'partial', summary: '查詢、上架、下架及刪除商品，可按 ID、狀態和銷量篩選。', details: '商品列表 API 和只讀查詢已完成；批量寫入及刪除尚未接入。', tool: 'products' },
+      { id: 'products-bulk', name: '商品批量操作', status: 'partial', summary: '查詢、上架、下架及刪除商品，可按 ID、狀態和銷量篩選。', details: '商品列表 API 和只讀查詢已完成；批量寫入及刪除尚未接入。', tool: 'products' },
       { id: 'products-title', name: '修改標題', status: 'mapping', summary: '逐件或批量修改標題，提供熱詞推薦及廣告關聯處理。', details: '商品編輯、熱詞來源和「複製商品後刪原商品」流程仍需逐項對照官方 API。' },
     ],
   },
