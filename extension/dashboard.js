@@ -1274,6 +1274,7 @@ function legacyControl(labelText, id, { kind = 'text', value = '', placeholder =
       option.value = optionValue;
       control.append(option);
     }
+    control.value = value || control.options[0]?.value || '';
   } else {
     control = node(kind === 'textarea' ? 'textarea' : 'input');
     if (kind !== 'textarea') control.type = kind;
@@ -1433,6 +1434,260 @@ function appendBoostLayout(detail, feature) {
   legacyStatus(detail, feature);
 }
 
+function legacyRadio(name, id, value, labelText, checked = false, disabled = false) {
+  const label = node('label', 'legacy-radio');
+  const input = node('input');
+  input.type = 'radio';
+  input.name = name;
+  input.id = id;
+  input.value = value;
+  input.checked = checked;
+  input.disabled = disabled;
+  label.append(input, node('span', '', labelText));
+  return label;
+}
+
+function legacyCheck(id, labelText) {
+  const label = node('label', 'legacy-radio');
+  const input = node('input');
+  input.type = 'checkbox';
+  input.id = id;
+  label.append(input, node('span', '', labelText));
+  return label;
+}
+
+function appendReopenSection(form, mode) {
+  const manual = mode === 'manual';
+  form.append(node('h3', '', manual ? '手動 ROI 重開' : '系統 ROI 重開'));
+  const budgetRow = node('div', 'group-parameter-row');
+  budgetRow.append(legacyControl('每日預算 (TWD)', `reopen-${mode}-budget`, {
+    kind: 'number', value: '85', min: '40', placeholder: '例如 85',
+  }).wrapper);
+  if (manual) budgetRow.append(legacyControl('目標 ROI', 'reopen-manual-roi', {
+    kind: 'number', min: '1', placeholder: '例如 30',
+  }).wrapper);
+  form.append(budgetRow);
+  if (manual) form.append(legacyCheck('reopen-manual-rapid-boost', '啟用加速推廣 (Rapid Boost)'));
+  else form.append(node('p', 'group-intro', '系統 ROI 不支援加速推廣。'));
+  const choices = node('div', 'group-parameter-row');
+  choices.append(legacyControl('操作模式', `reopen-${mode}-mode`, { kind: 'select', options: [
+    ['exclude', '排除模式：排除指定商品 ID'], ['include', '指定模式：僅重開指定的商品 ID'],
+  ], value: 'include' }).wrapper,
+  legacyControl('重開時間', `reopen-${mode}-delay`, { kind: 'select', options: [
+    ['0', '立即重開'], ['10', '10 分鐘後'], ['30', '30 分鐘後'], ['60', '1 小時後'],
+  ] }).wrapper);
+  form.append(choices, legacyControl('商品 ID 列表', `reopen-${mode}-ids`, {
+    kind: 'textarea', placeholder: '用逗號、空格或換行分隔商品 ID',
+  }).wrapper, legacyAction(manual ? '🔄 重開手動 ROI 廣告' : '⚡ 重開系統 ROI 廣告',
+    manual ? '先刪除廣告，再重新建立手動 ROI 廣告。' : '先刪除廣告，再重新建立系統 ROI 廣告。',
+    '重開廣告', `btn-reopen-${mode}-ads`, manual ? '' : 'secondary'));
+}
+
+function appendReopenLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout');
+  form.append(node('p', 'group-intro', '原版流程是先刪除現有廣告，再重新建立；支援指定與排除商品 ID。'));
+  appendReopenSection(form, 'manual');
+  form.append(node('hr', 'delete-ads-divider'));
+  appendReopenSection(form, 'auto');
+  detail.append(form);
+  legacyStatus(detail, feature);
+}
+
+function appendFilterMetric(form, title, prefix, operators, { range = false } = {}) {
+  const group = node('div', 'legacy-metric');
+  group.append(node('strong', '', title));
+  const row = node('div', 'legacy-metric-row');
+  const select = legacyControl('比較', `md-${prefix}-op`, { kind: 'select', options: operators });
+  const value = legacyControl('數值', `md-${prefix}-val`, { kind: 'number', min: '0', step: '0.01' });
+  row.append(select.wrapper, value.wrapper);
+  if (range) {
+    const second = legacyControl('上限', `md-${prefix}-val2`, { kind: 'number', min: '0', step: '0.01' });
+    second.wrapper.hidden = true;
+    select.control.addEventListener('change', () => { second.wrapper.hidden = select.control.value !== 'range'; });
+    row.append(second.wrapper);
+  }
+  group.append(row);
+  form.append(group);
+}
+
+function appendFilterLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout');
+  form.append(node('h3', '', '按數據篩選'));
+  const columns = node('div', 'legacy-filter-columns');
+  const criteria = node('div', 'legacy-filter-section');
+  const products = node('div', 'legacy-filter-section');
+  criteria.append(node('h4', '', '日期範圍與狀態'), legacyControl('日期範圍', 'md-date-preset', {
+    kind: 'select', options: [['today', '今天'], ['yesterday', '昨天'], ['last7', '過去 7 天'],
+      ['last30', '過去 30 天'], ['last90', '近三個月']],
+  }).wrapper, node('strong', '', '廣告狀態'));
+  criteria.append(legacyRadio('md-state', 'ongoing-state', 'ongoing', '僅進行中', true),
+    legacyRadio('md-state', 'all-state', 'all', '全部狀態', false, true),
+    node('h4', '', '數據篩選條件'));
+  const metricChecks = node('div', 'legacy-metric-grid');
+  const impression = node('div', 'legacy-metric');
+  impression.append(node('strong', '', '瀏覽量條件'), legacyCheck('md-no-impression', '無瀏覽量'),
+    legacyCheck('md-imp-lt-en', '瀏覽量低於'),
+    legacyControl('瀏覽量上限', 'md-imp-lt', { kind: 'number', min: '0', placeholder: '例如 10' }).wrapper);
+  const clicks = node('div', 'legacy-metric');
+  clicks.append(node('strong', '', '點擊量條件'), legacyCheck('md-no-click', '無點擊'),
+    legacyCheck('md-view-noclick', '有瀏覽量但無點擊'),
+    legacyControl('點擊量低於', 'md-click-lt', { kind: 'number', min: '0', placeholder: '填寫數值' }).wrapper);
+  const hiddenClickToggle = node('input');
+  hiddenClickToggle.type = 'checkbox';
+  hiddenClickToggle.id = 'md-click-lt-en';
+  hiddenClickToggle.hidden = true;
+  clicks.append(hiddenClickToggle);
+  metricChecks.append(impression, clicks);
+  criteria.append(metricChecks);
+  appendFilterMetric(criteria, '單點花費（CPC，TWD）', 'cpc', [['gt', '大於'], ['lt', '小於']]);
+  appendFilterMetric(criteria, '投入產出比（ROI）', 'roi', [['gt', '大於'], ['lt', '小於']]);
+  appendFilterMetric(criteria, '目標投入產出比', 'target-roi',
+    [['gt', '大於'], ['lt', '小於'], ['eq', '等於'], ['range', '區間']], { range: true });
+  appendFilterMetric(criteria, '花費成本（Cost，TWD）', 'cost',
+    [['gt', '大於'], ['lt', '小於'], ['range', '區間']], { range: true });
+  criteria.append(legacyControl('加速推廣狀態', 'md-rapid-boost-filter', { kind: 'select', options: [
+    ['all', '全部'], ['enabled', '已加速'], ['disabled', '未加速'],
+  ] }).wrapper, node('strong', '', '匹配方式'),
+  legacyRadio('md-match', 'any-match', 'any', '任一條件滿足即匹配', true),
+  legacyRadio('md-match', 'all-match', 'all', '全部條件滿足才匹配'));
+  products.append(node('h4', '', '商品 ID 過濾'),
+    legacyControl('僅查詢這些 ID 的商品', 'md-only-ids', {
+      kind: 'textarea', placeholder: '空格、逗號或換行分隔',
+    }).wrapper,
+    legacyControl('排除這些 ID', 'md-exclude-ids', {
+      kind: 'textarea', placeholder: '空格、逗號或換行分隔',
+    }).wrapper);
+  const actions = node('div', 'legacy-filter-actions');
+  for (const [id, label] of [
+    ['btn-start-query-ads', '查詢廣告'], ['btn-preview-metric-delete', '預覽結果'],
+    ['btn-download-product-performance', '下載表格'], ['btn-confirm-delete', '確認刪除'],
+    ['btn-download-matched-results', '下載結果'],
+  ]) {
+    const button = node('button', 'task-primary-btn', label);
+    button.type = 'button'; button.id = id; button.disabled = true;
+    actions.append(button);
+  }
+  products.append(actions);
+  const result = node('div', 'legacy-filter-result');
+  result.append(legacyControl('匹配的商品 ID（共 0 個）', 'matched-product-ids', {
+    kind: 'textarea', placeholder: '查詢匹配的商品 ID 將顯示在這裡…',
+  }).wrapper);
+  result.querySelector('textarea').readOnly = true;
+  products.append(result);
+  columns.append(criteria, products);
+  form.append(columns);
+  detail.append(form);
+  legacyStatus(detail, feature);
+  appendFilterTool(detail);
+}
+
+function appendHealthLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout');
+  form.append(node('h3', '', '狀態過濾'));
+  const states = node('div', 'legacy-radio-row');
+  states.append(legacyRadio('hc-state', 'hc-ongoing', 'ongoing', '只看進行中', true),
+    legacyRadio('hc-state', 'hc-all', 'all', '全部'));
+  form.append(states, node('p', 'group-intro', '原版按總數分頁掃描廣告，標註異常商品 ID 與標題。'),
+    legacyAction('🔍 掃描違規／異常狀態', '檢查廣告是否存在違規或異常情況。',
+      '開始掃描', 'btn-healthcheck', 'secondary'));
+  const result = node('div', 'output');
+  result.id = 'hc-result';
+  form.append(result);
+  detail.append(form);
+  legacyStatus(detail, feature);
+  appendHealthTool(detail);
+}
+
+function appendTitleLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout');
+  const initial = node('div');
+  initial.id = 'initial-prompt-area';
+  initial.append(node('p', 'group-intro', '選擇商品並修改其標題。'));
+  const ids = legacyControl('商品 ID 列表（可選）', 'product-ids-input', {
+    kind: 'textarea', placeholder: '輸入商品 ID，以逗號或換行分隔',
+    help: '目前先核對前 100 件在架商品；尚未接入標題編輯。',
+  });
+  initial.append(ids.wrapper);
+  const progress = node('div', 'group-intro');
+  progress.id = 'product-ids-progress';
+  progress.hidden = true;
+  const current = node('span', '', '0');
+  current.id = 'current-id-index';
+  const total = node('span', '', '0');
+  total.id = 'total-ids-count';
+  progress.append('進度：', current, ' / ', total);
+  initial.append(progress);
+  const select = node('button', 'run-button', '選擇商品');
+  select.id = 'select-product-btn';
+  select.type = 'button';
+  initial.append(select);
+  const selected = node('div', 'legacy-title-selected');
+  selected.id = 'selected-product-info';
+  selected.hidden = true;
+  selected.append(node('h3', '', '已選擇的商品'));
+  const display = node('div', 'output');
+  display.id = 'selected-product-display';
+  selected.append(display);
+  const keywords = node('div', 'legacy-keywords');
+  keywords.id = 'keyword-recommendation-area';
+  keywords.hidden = true;
+  const search = legacyControl('搜尋關鍵詞', 'keyword-search-input', {
+    placeholder: '輸入尋找關鍵字',
+  });
+  keywords.append(search.wrapper);
+  for (const [id, label] of [['keyword-search-btn', '搜尋'], ['keyword-search-clear', '清除']]) {
+    const button = node('button', 'run-button', label);
+    button.type = 'button'; button.id = id; button.disabled = true;
+    keywords.append(button);
+  }
+  const tableContainer = node('div', 'output');
+  const keywordTable = node('table', 'data-table');
+  const head = node('tr');
+  for (const label of ['關鍵字', '品質分數', '搜尋量', '建議出價']) head.append(node('th', '', label));
+  const body = node('tbody');
+  body.id = 'keywords-table';
+  const tableHead = node('thead');
+  tableHead.append(head);
+  keywordTable.append(tableHead);
+  keywordTable.append(body);
+  tableContainer.append(keywordTable);
+  keywords.append(node('h3', '', '推薦關鍵字（0）'), tableContainer);
+  selected.append(keywords);
+  select.addEventListener('click', async () => {
+    select.disabled = true;
+    selected.hidden = false;
+    display.textContent = '正在讀取前 100 件在架商品…';
+    try {
+      const desired = parseItemIds(ids.control.value);
+      const result = await api('/api/items?status=NORMAL&pageSize=100');
+      const products = result.item || [];
+      const match = desired.size
+        ? products.find(item => desired.has(String(item.item_id))) : products[0];
+      if (!match) {
+        display.textContent = desired.size
+          ? '前 100 件在架商品中找不到指定 ID；仍可能在後續頁面。'
+          : '前 100 件在架商品沒有可選商品。';
+        return;
+      }
+      display.replaceChildren(node('strong', '', `商品 ID：${match.item_id}`),
+        node('p', '', `狀態：${match.item_status || '未確認'}`),
+        node('p', 'query-note', '商品標題與推薦關鍵詞尚未接入官方 API，不能在此修改。'));
+      if (desired.size) {
+        progress.hidden = false;
+        current.textContent = '1';
+        total.textContent = String(desired.size);
+      } else progress.hidden = true;
+    } catch (error) {
+      display.textContent = error.message || String(error);
+    } finally {
+      select.disabled = false;
+    }
+  });
+  form.append(initial, selected);
+  detail.append(form);
+  legacyStatus(detail, feature);
+}
+
 function renderFeature(feature) {
   activeFeature = feature;
   const detail = $('feature-detail');
@@ -1450,6 +1705,10 @@ function renderFeature(feature) {
     'ads-specific': appendSpecificAdsLayout,
     'ads-roi': appendRoiBudgetLayout,
     'ads-boost': appendBoostLayout,
+    'ads-reopen': appendReopenLayout,
+    'ads-filter': appendFilterLayout,
+    'ads-health': appendHealthLayout,
+    'products-title': appendTitleLayout,
   }[feature.id];
   if (legacyLayout) {
     legacyLayout(detail, feature);

@@ -148,3 +148,21 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 @media (max-width: 1150px) { .roi-budget-columns { grid-template-columns: 1fr; } }
 @media (max-width: 1280px) { .manual-settings-row, .task-choice-grid { grid-template-columns: 1fr; } }
 @media (max-width: 1200px) { .header-context { max-width: 320px; }.header-chip { display: none; }.fixed-panel { width: 320px; } }
+.legacy-radio { display: flex; align-items: center; gap: 8px; margin: 7px 0; color: #354157; font-size: 11px; font-weight: 500; }
+.legacy-radio input { accent-color: #ee4d2d; }
+.legacy-radio-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.legacy-filter-columns { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, .8fr); gap: 14px; }
+.legacy-filter-section { min-width: 0; padding: 14px; border: 1px solid #dfe5ee; border-radius: 8px; background: #fff; }
+.legacy-filter-section h4 { margin: 5px 0 12px; padding-bottom: 7px; border-bottom: 1px solid #e5e9ef; }
+.legacy-metric-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.legacy-metric { min-width: 0; padding: 10px; margin: 9px 0; border: 1px solid #e5e9ef; border-radius: 7px; background: #f9fafc; }
+.legacy-metric strong { display: block; margin-bottom: 8px; color: #344156; font-size: 11px; }
+.legacy-metric .legacy-field { margin-bottom: 4px; }
+.legacy-metric-row { display: grid; grid-template-columns: 100px repeat(2, minmax(0, 1fr)); gap: 8px; }
+.legacy-filter-actions { display: flex; justify-content: flex-end; gap: 7px; flex-wrap: wrap; margin: 14px 0; }
+.legacy-filter-actions .task-primary-btn { width: auto; min-height: 32px; padding: 5px 12px; margin: 0; }
+.legacy-filter-actions #btn-confirm-delete { background: #dc3545; }
+.legacy-filter-result .legacy-field textarea { background: #f8f9fa; }
+@media (max-width: 1150px) { .legacy-filter-columns, .legacy-metric-grid { grid-template-columns: 1fr; } }
+.legacy-title-selected { margin-top: 20px; }.legacy-title-selected .output { margin-bottom: 14px; }
+.legacy-keywords .run-button { margin: 0 7px 12px 0; }

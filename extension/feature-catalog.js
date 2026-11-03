@@ -21,7 +21,7 @@ export const modules = [
   {
     id: 'products', name: '商品管理', icon: '📦', features: [
       { id: 'products-bulk', name: '商品批量操作', status: 'partial', summary: '查詢、上架、下架及刪除商品，可按 ID、狀態和銷量篩選。', details: '商品列表 API 和只讀查詢已完成；批量寫入及刪除尚未接入。', tool: 'products' },
-      { id: 'products-title', name: '修改標題', status: 'mapping', summary: '逐件或批量修改標題，提供熱詞推薦及廣告關聯處理。', details: '商品編輯、熱詞來源和「複製商品後刪原商品」流程仍需逐項對照官方 API。' },
+      { id: 'products-title', name: '修改標題', status: 'partial', summary: '逐件或批量修改標題，提供熱詞推薦及廣告關聯處理。', details: '可只讀核對前 100 件在架商品中的指定 ID；商品標題詳情、編輯、熱詞來源和「複製商品後刪原商品」流程仍需逐項對照官方 API。' },
     ],
   },
   {
