@@ -871,6 +871,22 @@ function previewTextarea(parent, label, placeholder) {
   parent.append(wrapper);
 }
 
+function previewSelect(parent, label, options) {
+  const wrapper = node('label', 'preview-field', label);
+  const select = node('select');
+  for (const text of options) select.append(node('option', '', text));
+  wrapper.append(select);
+  parent.append(wrapper);
+}
+
+function previewCheckbox(parent, label) {
+  const wrapper = node('label', 'preview-check');
+  const input = node('input');
+  input.type = 'checkbox';
+  wrapper.append(input, node('span', '', label));
+  parent.append(wrapper);
+}
+
 function previewTask(parent, title, description, buttonLabel) {
   const card = node('div', 'task-option');
   card.append(node('strong', '', title), node('p', '', description));
@@ -888,7 +904,7 @@ function appendLegacyPreview(featureId, setup, execution) {
     previewInput(form, '每日預算', '85', { unit: 'TWD' });
     previewTextarea(form, '排除商品 ID（可選）', '不想開啟廣告的商品 ID；支援逗號、空格或換行分隔');
     previewInput(form, '目標投入產出比（自訂 ROAS）', '30');
-    previewInput(form, '加速推廣', '關閉', { type: 'text' });
+    previewCheckbox(form, '啟用加速推廣（僅自訂 ROAS）');
     previewTask(tasks, '全店開啟 · 自訂 ROAS', '按指定目標 ROAS 為未投放商品建立廣告。', '執行自訂 ROAS');
     previewTask(tasks, '全店開啟 · 系統自動 ROAS', '由平台自動優化，僅處理符合資格的商品。', '執行系統自動 ROAS');
   } else if (featureId === 'ads-groups') {
@@ -910,6 +926,131 @@ function appendLegacyPreview(featureId, setup, execution) {
     previewTask(tasks, '按排除 ID 刪除', '刪除全部進行中的廣告，排除指定的商品。', '刪除廣告');
     previewTextarea(form, '要刪除的商品 ID（支持多 ID）', '用逗號、空格或換行分隔');
     previewTask(tasks, '按指定 ID 刪除', '只刪除指定商品 ID 的廣告。', '按 ID 刪除');
+  } else if (featureId === 'products-bulk') {
+    previewTextarea(form, '指定商品 ID（可選，多 ID）', '留空代表全部；逗號、空格或換行分隔');
+    previewTextarea(form, '排除商品 ID（可選，多 ID）', '逗號、空格或換行分隔');
+    previewSelect(form, '操作類型', ['刪除全部商品', '刪除已下架商品', '上架未上架商品', '下架已上架商品']);
+    previewInput(form, '下架商品總銷量上限', '0');
+    previewInput(form, '本次最多上架數量（可選）', '0');
+    previewTask(tasks, '商品批量操作', '依指定、排除與商品狀態處理。', '開始執行');
+  } else if (featureId === 'ads-specific') {
+    previewTextarea(form, '手動 ROI · 商品 ID（多 ID）', '逗號、空格或換行分隔');
+    previewInput(form, '手動 ROI · 每日預算', '85', { unit: 'TWD' });
+    previewInput(form, '手動 ROI · 目標 ROI', '30');
+    previewCheckbox(form, '手動 ROI · 加速推廣');
+    previewTask(tasks, '手動 ROI', '按指定商品 ID 開啟自訂目標廣告。', '開啟手動 ROI');
+    previewTextarea(form, '自動 ROI · 商品 ID（多 ID）', '逗號、空格或換行分隔');
+    previewInput(form, '自動 ROI · 每日預算', '85', { unit: 'TWD' });
+    previewTask(tasks, '自動 ROI', '按指定商品 ID 開啟平台自動競價廣告。', '開啟自動 ROI');
+  } else if (featureId === 'ads-roi') {
+    previewInput(form, '目標 ROI（0 代表系統 ROI）', '30');
+    previewCheckbox(form, '修改 ROI 時啟用加速推廣');
+    previewTextarea(form, '修改 ROI · 排除商品 ID', '這些商品不修改');
+    previewTextarea(form, '修改 ROI · 指定商品 ID', '只修改這些商品');
+    previewTask(tasks, '批量修改 ROI', '原版可按排除或指定商品 ID 修改進行中的活動。', '修改 ROI');
+    previewInput(form, '目標每日預算', '85', { unit: 'TWD' });
+    previewTextarea(form, '修改預算 · 排除商品 ID', '這些商品不修改');
+    previewTextarea(form, '修改預算 · 指定商品 ID', '只修改這些商品');
+    previewTask(tasks, '批量修改預算', '原版可按排除或指定商品 ID 修改進行中的活動。', '修改預算');
+  } else if (featureId === 'ads-boost') {
+    previewSelect(form, '處理方式', ['全部進行中的自訂 ROI 廣告', '指定商品 ID', '指定廣告 ID']);
+    previewTextarea(form, '商品 ID 或廣告 ID', '逗號、空格或換行分隔');
+    previewTask(tasks, '開啟加速推廣', '對篩選出的活動開啟加速推廣。', '開啟');
+    previewTask(tasks, '關閉加速推廣', '對篩選出的活動關閉加速推廣。', '關閉');
+  } else if (featureId === 'ads-reopen') {
+    previewInput(form, '手動 ROI · 每日預算', '85', { unit: 'TWD' });
+    previewInput(form, '手動 ROI · 目標 ROI', '30');
+    previewCheckbox(form, '手動 ROI · 加速推廣');
+    previewSelect(form, '手動 ROI · 操作模式', ['指定商品', '排除商品']);
+    previewSelect(form, '手動 ROI · 重開時間', ['立即重開', '延遲重開']);
+    previewTextarea(form, '手動 ROI · 商品 ID', '逗號、空格或換行分隔');
+    previewTask(tasks, '手動 ROI 重開', '原版會刪除後重建活動。', '重開廣告');
+    previewInput(form, '系統 ROI · 每日預算', '85', { unit: 'TWD' });
+    previewSelect(form, '系統 ROI · 操作模式', ['指定商品', '排除商品']);
+    previewSelect(form, '系統 ROI · 重開時間', ['立即重開', '延遲重開']);
+    previewTextarea(form, '系統 ROI · 商品 ID', '逗號、空格或換行分隔');
+    previewTask(tasks, '系統 ROI 重開', '原版會刪除後重建活動。', '重開廣告');
+  } else if (featureId === 'ads-filter') {
+    previewSelect(form, '日期範圍', ['今天', '昨天', '最近 7 天', '自訂日期']);
+    previewSelect(form, '廣告狀態', ['僅進行中', '全部狀態']);
+    previewInput(form, '瀏覽量低於', '10');
+    previewInput(form, '點擊量低於', '1');
+    previewInput(form, 'CPC 閾值', '5', { unit: 'TWD' });
+    previewInput(form, 'ROI 閾值', '3');
+    previewInput(form, '目標 ROI 閾值', '30');
+    previewInput(form, '花費成本閾值', '85', { unit: 'TWD' });
+    previewSelect(form, '加速推廣狀態', ['不限', '已啟用', '未啟用']);
+    previewSelect(form, '匹配方式', ['任一條件', '全部條件']);
+    previewTextarea(form, '僅查詢商品 ID', '逗號、空格或換行分隔');
+    previewTextarea(form, '排除商品 ID', '逗號、空格或換行分隔');
+    previewTask(tasks, '批量篩選與處理', '原版含預覽、匯出及確認刪除。下方只讀工具已接入部分條件。', '確認刪除');
+  } else if (featureId === 'ads-health') {
+    previewSelect(form, '狀態過濾', ['僅進行中', '全部狀態']);
+    previewTask(tasks, '廣告健康檢查', '原版會分頁掃描全部活動並標記異常。下方只讀工具目前僅檢查一頁。', '全店檢查');
+  } else if (featureId === 'products-title') {
+    previewTextarea(form, '商品 ID 列表（可選）', '逗號、空格或換行分隔');
+    previewInput(form, '搜尋關鍵詞', '', { type: 'text' });
+    previewTask(tasks, '選擇商品與推薦熱詞', '原版可檢索熱詞並選擇待改商品。', '選擇商品');
+    previewTask(tasks, '修改標題', '原版可批量改標題，並可處理關聯廣告。', '修改標題');
+  } else if (featureId === 'budget-rules') {
+    previewSelect(form, '活動狀態', ['僅進行中', '全部狀態']);
+    previewTextarea(form, '商品 ID（多 ID）', '逗號、空格或換行分隔');
+    previewInput(form, '追加金額', '20', { unit: 'TWD' });
+    previewInput(form, '最高預算上限', '200', { unit: 'TWD' });
+    previewInput(form, '延遲執行', '2', { unit: '分鐘' });
+    previewInput(form, '查詢頻率', '2', { unit: '分鐘' });
+    previewInput(form, '單點花費上限', '5', { unit: 'TWD' });
+    previewInput(form, '最低投產比', '2');
+    previewCheckbox(form, '符合條件時可重複追加');
+    previewInput(form, '預算預留空間', '50-200', { type: 'text' });
+    previewInput(form, '23:55 還原的預算', '40', { unit: 'TWD' });
+    previewCheckbox(form, '23:55 暫停廣告');
+    previewCheckbox(form, '23:55 調整 ROI');
+    previewInput(form, '次日恢復時間', '00:30', { type: 'time' });
+    previewInput(form, 'ROI 還原時間', '00:30', { type: 'time' });
+    previewCheckbox(form, '按時段調整 ROI');
+    previewCheckbox(form, '全天追加預算');
+    previewTask(tasks, '預算水位線排程', '原版可新增多規則、啟停排程並查看執行日誌。', '啟動自動追加');
+  } else if (featureId === 'shipping-days') {
+    previewSelect(form, '備貨天數', ['現貨 1 天', '預售 3–15 天']);
+    previewSelect(form, '更新範圍', ['全部在架商品', '指定商品', '依銷量篩選']);
+    previewTextarea(form, '排除商品 ID', '逗號、空格或換行分隔');
+    previewCheckbox(form, '同時調整物流渠道');
+    previewTask(tasks, '手動更新備貨天數', '原版可直接執行或設定定時任務。', '手動更新');
+    previewTask(tasks, '定時更新備貨天數', '原版可設定任務頻率與生效時間。', '設定定時');
+  } else if (featureId === 'shipping-channels') {
+    previewSelect(form, '物流渠道操作', ['啟用', '停用', '調整渠道']);
+    previewTextarea(form, '商品 ID', '逗號、空格或換行分隔');
+    previewTask(tasks, '批量設定物流渠道', '依所選商品與渠道執行。', '執行設定');
+  } else if (featureId === 'shipping-stock') {
+    previewTask(tasks, '查詢現貨／預售', '原版統計較長備貨商品，並可複製現貨和預售 ID。', '開始查詢');
+  } else if (featureId === 'shipping-next') {
+    previewInput(form, '隔日到貨開通比例', '10', { unit: '%' });
+    previewTask(tasks, '批量開啟隔日到貨', '原版優先選擇零銷量在架商品。', '開始執行');
+    previewTask(tasks, '恢復本次變更', '關閉本次渠道並還原備貨天數。', '恢復');
+  } else if (featureId === 'shipping-gift') {
+    previewInput(form, '統一備貨天數', '7');
+    previewTextarea(form, '贈品商品 ID', '每行一個或以逗號分隔');
+    previewTask(tasks, '贈品與 SKU 聯動', '原版可選既有活動並同步商品備貨與物流。', '執行聯動');
+  } else if (featureId === 'marketing-bundle') {
+    previewSelect(form, '商品範圍', ['全店在售商品', '手動輸入商品 ID']);
+    previewInput(form, '滿件數', '5');
+    previewInput(form, '減免金額', '5', { unit: 'TWD' });
+    previewInput(form, '單買家購買限制', '1');
+    previewTextarea(form, '商品 ID', '一行一個');
+    previewTask(tasks, '批量開促銷組合', '先核對商品資格和活動時間。', '開始批量建立');
+  } else if (featureId === 'marketing-discount') {
+    previewSelect(form, '商品範圍', ['全店在售商品', '手動輸入商品 ID']);
+    previewInput(form, '折扣（折）', '9');
+    previewTextarea(form, '商品 ID', '一行一個');
+    previewTask(tasks, '批量開折扣活動', '先核對活動衝突與商品資格。', '開始批量建立');
+  } else if (featureId === 'marketing-gift') {
+    previewInput(form, '統一備貨天數', '7');
+    previewTextarea(form, '贈品商品 ID', '一行一個或以逗號分隔');
+    previewTask(tasks, '一鍵建立滿額贈', '原版可建立滿額贈活動。', '建立活動');
+    previewTask(tasks, '修改已有滿額贈', '原版可選既有活動修改商品天數。', '選擇活動');
+  } else if (featureId === 'flash-renew') {
+    previewTask(tasks, '限時特賣續期', '原版到期前擷取活動商品和價格，關閉舊活動並建立下一期。', '啟動續期');
   } else {
     return false;
   }
