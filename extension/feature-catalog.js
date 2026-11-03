@@ -26,7 +26,7 @@ export const modules = [
   },
   {
     id: 'shipping', name: '發貨與物流', icon: '🚚', features: [
-      { id: 'shipping-days', name: '批量發貨天數', status: 'mapping', summary: '設現貨 1 天或預售 3–15 天，依商品狀態、銷量和活動排除。', details: '需確認 Product API 對整品與 SKU 備貨天數的修改規則。' },
+      { id: 'shipping-days', name: '批量發貨天數', status: 'partial', summary: '設現貨 1 天或預售 3–15 天，依商品狀態、銷量和活動排除。', details: '已按原版建立模式、範圍、排除、物流聯動與雙排程欄位，可只讀預覽前 100 件上架／下架商品；銷量、特賣、滿額贈、備貨天數寫入和定時任務仍未接入。' },
       { id: 'shipping-channels', name: '物流渠道設定', status: 'mapping', summary: '批量開關或調整商品的物流渠道。', details: '需確認 Logistics 與 Product API 的商品物流設定能力。' },
       { id: 'shipping-stock', name: '現貨預售查詢', status: 'mapping', summary: '統計發貨天數並複製現貨／預售商品 ID。', details: '需要商品詳情與 SKU 層級發貨天數查詢。' },
       { id: 'shipping-next', name: '全店改隔日到貨', status: 'mapping', summary: '按比例選零銷量商品，改 1 天並啟用隔日到貨；支援恢復。', details: '需確認臺灣站隔日到貨渠道、資格條件和可逆變更方式。' },

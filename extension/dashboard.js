@@ -1895,6 +1895,140 @@ function appendBudgetLayout(detail, feature) {
   });
 }
 
+function shippingChoice(id, title, description, active, onClick) {
+  const button = node('button', `shipping-choice${active ? ' active' : ''}`);
+  button.type = 'button';
+  button.id = id;
+  button.append(node('strong', '', title), node('small', '', description));
+  button.addEventListener('click', onClick);
+  return button;
+}
+
+function appendShippingDaysLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout shipping-days-layout');
+  form.append(node('h3', '', '🚚 批量改天數'));
+  const modes = node('div', 'shipping-choice-grid');
+  let shippingMode = 'spot';
+  const days = legacyControl('發貨時間（天）', 'daysToShip', { kind: 'select',
+    value: '7', options: Array.from({ length: 14 }, (_, index) => [String(index + 2), `${index + 2} 天`]),
+  });
+  const daysGroup = node('div');
+  daysGroup.id = 'daysToShipGroup';
+  daysGroup.hidden = true;
+  daysGroup.append(days.wrapper);
+  const chooseMode = next => {
+    shippingMode = next;
+    for (const child of modes.children) child.classList.toggle('active', child.id === (next === 'spot' ? 'optionSpot' : 'optionPreorder'));
+    daysGroup.hidden = next === 'spot';
+  };
+  modes.append(shippingChoice('optionSpot', '現貨模式', '1 天發貨', true, () => chooseMode('spot')),
+    shippingChoice('optionPreorder', '預售模式', '3–15 天發貨', false, () => chooseMode('preorder')));
+  form.append(modes, daysGroup, node('h4', '', '更新範圍'));
+  const scopes = node('div', 'shipping-choice-grid scope-grid');
+  let scope = 'nonhot';
+  const chooseScope = next => {
+    scope = next;
+    const ids = { all: 'optionAll', online: 'optionOnline', offline: 'optionOffline', nonhot: 'optionNonHot' };
+    for (const child of scopes.children) child.classList.toggle('active', child.id === ids[next]);
+    topPercent.wrapper.hidden = next !== 'nonhot';
+  };
+  scopes.append(shippingChoice('optionNonHot', '非熱銷商品', '按銷量排除頭部比例', true, () => chooseScope('nonhot')),
+    shippingChoice('optionOnline', '只修改上架商品', '僅更新在線商品', false, () => chooseScope('online')),
+    shippingChoice('optionOffline', '只修改未上架商品', '僅更新未上架商品', false, () => chooseScope('offline')),
+    shippingChoice('optionAll', '修改店鋪所有商品', '包括在線和未上架', false, () => chooseScope('all')));
+  form.append(scopes);
+  const topPercent = legacyControl('排除銷量頭部比例 (%)', 'excludeTopSalesPercent', {
+    kind: 'number', value: '9', min: '0.1', step: '0.1',
+    help: '原版按銷量排序後排除頭部商品；目前 API 尚未接入銷量，無法預覽此模式。',
+  });
+  topPercent.wrapper.id = 'excludeTopSalesPercentGroup';
+  form.append(topPercent.wrapper);
+  const excluded = legacyControl('排除商品 ID', 'excludeProductIds', {
+    kind: 'textarea', placeholder: '每行一個或用逗號分隔',
+  });
+  form.append(excluded.wrapper, node('p', 'query-note', '原版還會排除限時特賣商品與選取的滿額贈商品；目前這兩項資料尚未接入。'));
+  const deals = node('div', 'group-action-row');
+  deals.append(node('span', '', '排除滿額贈活動商品'));
+  const dealButton = node('button', 'preview-delete-button', '設定');
+  dealButton.id = 'selectAddOnDealsBtn'; dealButton.type = 'button'; dealButton.disabled = true;
+  deals.append(dealButton);
+  form.append(deals, legacyCheck('toggleLogistics', '自動管理物流開關'));
+  const actions = node('div', 'shipping-actions');
+  for (const [id, label] of [
+    ['startBtn', '手動更新'], ['stopBtn', '停止'], ['autoBtn', '設定自動化任務'],
+    ['modifyLogisticsBtn', '物流設定'], ['resetStateBtn', '重置狀態'],
+  ]) {
+    const button = node('button', 'run-button', label);
+    button.id = id; button.type = 'button';
+    button.disabled = !['autoBtn', 'modifyLogisticsBtn'].includes(id);
+    actions.append(button);
+  }
+  form.append(actions);
+  const automation = node('div', 'shipping-automation');
+  automation.id = 'autoSettings';
+  automation.hidden = true;
+  automation.append(node('h3', '', '自動化設定'),
+    node('p', 'query-note', '此處可檢視兩項排程設定；後端排程尚未建立，保存及啟動停用。'));
+  for (const number of [1, 2]) {
+    const task = node('div', 'budget-rule-column');
+    task.append(node('h4', '', `計畫任務 ${number}${number === 2 ? '（可選）' : ''}`));
+    const row = node('div', 'group-parameter-row');
+    row.append(legacyControl('執行日期', `scheduledDate${number}`, { kind: 'date' }).wrapper,
+      legacyControl('執行時間', `scheduledTime${number}`, { kind: 'time', value: number === 1 ? '23:30' : '00:01' }).wrapper);
+    task.append(row, legacyControl('修改為發貨天數', `scheduledDays${number}`, {
+      kind: 'select', value: number === 1 ? '1' : '10',
+      options: Array.from({ length: 15 }, (_, index) => [String(index + 1), `${index + 1} 天`]),
+    }).wrapper);
+    if (number === 2) {
+      const clear = node('button', 'preview-delete-button', '清空此任務');
+      clear.id = 'clearTask2Btn'; clear.type = 'button';
+      clear.addEventListener('click', () => {
+        task.querySelector('#scheduledDate2').value = '';
+        task.querySelector('#scheduledTime2').value = '00:01';
+        task.querySelector('#scheduledDays2').value = '10';
+      });
+      task.append(clear);
+    }
+    automation.append(task);
+  }
+  for (const [id, label] of [['saveAutoBtn', '保存並啟動'], ['stopAllAutoBtn', '停止所有任務']]) {
+    const button = node('button', 'run-button', label);
+    button.id = id; button.type = 'button'; button.disabled = true;
+    automation.append(button);
+  }
+  form.append(automation);
+  actions.querySelector('#autoBtn').addEventListener('click', () => { automation.hidden = !automation.hidden; });
+  actions.querySelector('#modifyLogisticsBtn').addEventListener('click', () => {
+    renderFeature(activeModule.features.find(item => item.id === 'shipping-channels'));
+  });
+  const preview = node('button', 'preview-delete-button', '只讀預覽商品範圍');
+  preview.type = 'button';
+  const output = node('div', 'output', '選擇商品範圍後可預覽前 100 件商品。');
+  preview.addEventListener('click', async () => {
+    preview.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在讀取商品…';
+    try {
+      if (scope === 'nonhot') throw new Error('非熱銷商品需要銷量資料，目前無法安全預覽。請選擇上架、未上架或全部商品。');
+      const excludedIds = parseItemIds(excluded.control.value);
+      const statuses = scope === 'online' ? ['NORMAL'] : scope === 'offline' ? ['UNLIST'] : ['NORMAL', 'UNLIST'];
+      const params = statuses.map(status => `status=${status}`).join('&');
+      const result = await api(`/api/items?${params}&pageSize=100`);
+      const items = (result.item || []).filter(item => !excludedIds.has(String(item.item_id)));
+      table(output, ['商品 ID', '狀態'], items.map(item => [item.item_id, item.item_status]));
+      output.prepend(node('p', 'query-summary',
+        `本頁符合 ${items.length} 件；${result.has_next_page ? '後面還有商品，尚未讀完。' : '商品列表已讀完。'}${shippingMode === 'spot' ? '目標為現貨 1 天。' : `目標為預售 ${days.control.value} 天。`}`));
+      output.append(node('p', 'query-note', '未核對銷量、限時特賣、滿額贈與物流渠道；此處不會修改商品。'));
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { preview.disabled = false; }
+  });
+  form.append(preview, output);
+  detail.append(form);
+  legacyStatus(detail, feature);
+}
+
 function renderFeature(feature) {
   activeFeature = feature;
   const detail = $('feature-detail');
@@ -1917,6 +2051,7 @@ function renderFeature(feature) {
     'ads-health': appendHealthLayout,
     'products-title': appendTitleLayout,
     'budget-rules': appendBudgetLayout,
+    'shipping-days': appendShippingDaysLayout,
   }[feature.id];
   if (legacyLayout) {
     legacyLayout(detail, feature);

@@ -186,3 +186,13 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .budget-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .budget-rule-apply { margin-top: 12px; }
 @media (max-width: 1180px) { .budget-rule-top { grid-template-columns: 1fr; }.budget-rule-bottom { grid-template-columns: 1fr; } }
+.shipping-days-layout .shipping-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
+.shipping-days-layout .shipping-choice-grid.scope-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.shipping-choice { min-width: 0; padding: 13px; border: 1px solid #d7dee8; border-radius: 8px; background: #fff; color: #354157; text-align: left; cursor: pointer; }
+.shipping-choice.active { border-color: #ee4d2d; background: #fff5f2; box-shadow: inset 0 0 0 1px #ee4d2d; }
+.shipping-choice strong, .shipping-choice small { display: block; }.shipping-choice small { margin-top: 4px; color: #7d8999; }
+.shipping-days-layout .group-action-row { margin-bottom: 12px; }.shipping-days-layout .legacy-radio { margin: 12px 0; }
+.shipping-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
+.shipping-automation { display: grid; gap: 10px; margin: 14px 0; padding: 15px; border: 1px solid #dce3ec; border-radius: 8px; background: #f9fafc; }
+.shipping-automation .run-button { width: max-content; }
+@media (max-width: 1200px) { .shipping-days-layout .shipping-choice-grid.scope-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
