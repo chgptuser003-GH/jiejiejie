@@ -1,6 +1,7 @@
 import { modules, statuses } from './feature-catalog.js';
 import { calculateProfit, DEFAULT_CALCULATOR_SETTINGS } from './calculator.js';
 import { evaluateBudgetTopup } from './budget-rule.js';
+import { scanCampaignPages } from './campaign-scan.js';
 
 const BASE = 'http://127.0.0.1:8787';
 const node = (tag, className, text) => {
@@ -574,9 +575,10 @@ function appendPerformanceTool(container) {
 
 function appendFilterTool(container) {
   const { panel, fields, output } = toolPanel('沙盒廣告篩選與匯出',
-    '讀取本頁最多 100 個活動及指定日期的每日績效；只篩選和匯出，不會更改廣告。所有條件同時符合才會顯示。');
+    '逐頁讀取廣告與指定日期的每日績效，最多 10 頁／1000 個活動；只篩選和匯出，不會更改廣告。所有條件同時符合才會顯示。');
   const offset = field(fields, '活動起始位置', 'filter-offset', { value: '0', min: '0', step: '1' });
-  const limit = field(fields, '本頁活動上限', 'filter-limit', { value: '100', min: '1', step: '1' });
+  const limit = field(fields, '每頁活動上限', 'filter-limit', { value: '100', min: '1', step: '1' });
+  const maxPages = field(fields, '最多讀取頁數（1–10）', 'filter-pages', { value: '10', min: '1', step: '1' });
   const today = todayTaipei();
   const start = field(fields, '開始日期', 'filter-start', { type: 'date', value: today });
   const end = field(fields, '結束日期', 'filter-end', { type: 'date', value: today });
@@ -588,11 +590,11 @@ function appendFilterTool(container) {
   const maxCpc = field(fields, '最高 CPC TWD（可留空）', 'filter-cpc', { value: '', min: '0', step: '0.01' });
   const minRoi = field(fields, '最低 ROAS（可留空）', 'filter-roi', { value: '', min: '0', step: '0.01' });
   const minSpend = field(fields, '最少花費 TWD（可留空）', 'filter-spend', { value: '', min: '0', step: '0.01' });
-  const exportButton = node('button', 'run-button', '匯出目前結果 CSV');
+  const exportButton = node('button', 'run-button', '匯出完整掃描結果 CSV');
   exportButton.type = 'button';
   exportButton.disabled = true;
   let exportRows = null;
-  const inputs = [offset, limit, start, end, status, itemId, minClicks, maxCpc, minRoi, minSpend];
+  const inputs = [offset, limit, maxPages, start, end, status, itemId, minClicks, maxCpc, minRoi, minSpend];
   for (const input of inputs) {
     for (const eventName of ['input', 'change']) {
       input.addEventListener(eventName, () => { exportRows = null; exportButton.disabled = true; });
@@ -622,48 +624,52 @@ function appendFilterTool(container) {
     const cpcAtMost = optionalNumber(maxCpc, '最高 CPC');
     const roiAtLeast = optionalNumber(minRoi, '最低 ROAS');
     const spendAtLeast = optionalNumber(minSpend, '最少花費');
-    const listed = await api(`/api/ads?limit=${pageLimit}&offset=${pageOffset}`);
-    const campaigns = (listed.campaign_list || []).filter(item => item.campaign_id);
-    const ids = campaigns.map(item => String(item.campaign_id));
-    if (!ids.length) {
-      target.textContent = '本頁沒有廣告活動。';
-      return;
-    }
-    const joined = encodeURIComponent(ids.join(','));
-    const [settings, performance] = await Promise.all([
-      api(`/api/ads/settings?ids=${joined}`),
-      api(`/api/ads/daily?ids=${joined}&startDate=${dateForApi(start.value)}&endDate=${dateForApi(end.value)}`),
-    ]);
-    const byId = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
-    const metricsById = new Map((performance.campaign_list || []).map(item => [String(item.campaign_id), item.metrics_list || []]));
     const rows = [];
-    for (const listedCampaign of campaigns) {
-      const id = String(listedCampaign.campaign_id);
-      const info = byId.get(id)?.common_info;
-      if (!info) continue;
-      const productIds = (info.item_id_list || []).map(String);
-      const metrics = metricsById.get(id) || [];
-      const impressions = metrics.reduce((sum, metric) => sum + Number(metric.impression || 0), 0);
-      const clicks = metrics.reduce((sum, metric) => sum + Number(metric.clicks || 0), 0);
-      const spend = metrics.reduce((sum, metric) => sum + Number(metric.expense || 0), 0);
-      const gmv = metrics.reduce((sum, metric) => sum + Number(metric.broad_gmv || 0), 0);
-      const cpc = clicks > 0 ? spend / clicks : null;
-      const roi = spend > 0 ? gmv / spend : null;
-      if (status.value && info.campaign_status !== status.value) continue;
-      if (productId && !productIds.includes(productId)) continue;
-      if (clicksAtLeast !== null && clicks < clicksAtLeast) continue;
-      if (cpcAtMost !== null && (cpc === null || cpc > cpcAtMost)) continue;
-      if (roiAtLeast !== null && (roi === null || roi < roiAtLeast)) continue;
-      if (spendAtLeast !== null && spend < spendAtLeast) continue;
-      rows.push([id, info.ad_name, info.campaign_status, productIds.join('、'),
-        info.campaign_budget, byId.get(id)?.auto_bidding_info?.roas_target,
-        impressions, clicks, cpc === null ? null : cpc.toFixed(2), spend.toFixed(2),
-        roi === null ? null : roi.toFixed(2)]);
-    }
+    const scan = await scanCampaignPages({
+      startOffset: pageOffset, pageSize: pageLimit, maxPages: Number(maxPages.value),
+      fetchPage: ({ offset: nextOffset, limit: nextLimit }) => api(`/api/ads?limit=${nextLimit}&offset=${nextOffset}`),
+      onPage: async (campaigns, { page }) => {
+        target.textContent = `正在讀取第 ${page} 頁；已檢查 ${rows.length} 個符合條件的活動…`;
+        if (!campaigns.length) return;
+        const ids = campaigns.map(item => String(item.campaign_id));
+        const joined = encodeURIComponent(ids.join(','));
+        const [settings, performance] = await Promise.all([
+          api(`/api/ads/settings?ids=${joined}`),
+          api(`/api/ads/daily?ids=${joined}&startDate=${dateForApi(start.value)}&endDate=${dateForApi(end.value)}`),
+        ]);
+        const byId = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
+        if (ids.some(id => !byId.get(id)?.common_info)) {
+          throw new Error('有活動設定未回傳，已停止篩選；請重新查詢。');
+        }
+        const metricsById = new Map((performance.campaign_list || []).map(item => [String(item.campaign_id), item.metrics_list || []]));
+        for (const listedCampaign of campaigns) {
+          const id = String(listedCampaign.campaign_id);
+          const info = byId.get(id).common_info;
+          const productIds = (info.item_id_list || []).map(String);
+          const metrics = metricsById.get(id) || [];
+          const impressions = metrics.reduce((sum, metric) => sum + Number(metric.impression || 0), 0);
+          const clicks = metrics.reduce((sum, metric) => sum + Number(metric.clicks || 0), 0);
+          const spend = metrics.reduce((sum, metric) => sum + Number(metric.expense || 0), 0);
+          const gmv = metrics.reduce((sum, metric) => sum + Number(metric.broad_gmv || 0), 0);
+          const cpc = clicks > 0 ? spend / clicks : null;
+          const roi = spend > 0 ? gmv / spend : null;
+          if (status.value && info.campaign_status !== status.value) continue;
+          if (productId && !productIds.includes(productId)) continue;
+          if (clicksAtLeast !== null && clicks < clicksAtLeast) continue;
+          if (cpcAtMost !== null && (cpc === null || cpc > cpcAtMost)) continue;
+          if (roiAtLeast !== null && (roi === null || roi < roiAtLeast)) continue;
+          if (spendAtLeast !== null && spend < spendAtLeast) continue;
+          rows.push([id, info.ad_name, info.campaign_status, productIds.join('、'),
+            info.campaign_budget, byId.get(id)?.auto_bidding_info?.roas_target,
+            impressions, clicks, cpc === null ? null : cpc.toFixed(2), spend.toFixed(2),
+            roi === null ? null : roi.toFixed(2)]);
+        }
+      },
+    });
     table(target, columns, rows);
-    target.prepend(node('p', 'query-summary', `本頁檢查 ${campaigns.length} 個活動，符合 ${rows.length} 個${listed.has_next_page ? '；後面還有資料，請調整起始位置查下一頁' : ''}。`));
-    exportRows = rows;
-    exportButton.disabled = rows.length === 0;
+    target.prepend(node('p', 'query-summary', `已讀取 ${scan.pages} 頁、${scan.scanned} 個活動，符合 ${rows.length} 個。${scan.complete ? '已讀完活動清單。' : `後面還有資料；從位置 ${scan.nextOffset} 繼續掃描，完成前不提供匯出。`}`));
+    exportRows = scan.complete ? rows : null;
+    exportButton.disabled = !scan.complete || rows.length === 0;
   }, '篩選活動');
   exportButton.addEventListener('click', () => {
     if (!exportRows) return;
@@ -686,9 +692,10 @@ function appendFilterTool(container) {
 
 function appendHealthTool(container) {
   const { panel, fields, output } = toolPanel('沙盒廣告健康檢查',
-    '檢查本頁最多 100 個活動的設定、關聯商品狀態及指定日期績效。結果是資料檢查，不代表蝦皮違規判定。');
+    '逐頁檢查最多 10 頁／1000 個活動的設定、關聯商品狀態及指定日期績效。結果是資料檢查，不代表蝦皮違規判定。');
   const offset = field(fields, '活動起始位置', 'health-offset', { value: '0', min: '0', step: '1' });
-  const limit = field(fields, '本頁活動上限', 'health-limit', { value: '100', min: '1', step: '1' });
+  const limit = field(fields, '每頁活動上限', 'health-limit', { value: '100', min: '1', step: '1' });
+  const maxPages = field(fields, '最多讀取頁數（1–10）', 'health-pages', { value: '10', min: '1', step: '1' });
   const date = field(fields, '績效日期', 'health-date', { type: 'date', value: todayTaipei() });
   runButton(panel, output, async target => {
     const pageOffset = Number(offset.value);
@@ -698,26 +705,32 @@ function appendHealthTool(container) {
       throw new Error('起始位置須為非負整數，本頁上限須為 1–100。');
     }
     const day = dateForApi(date.value);
-    const listed = await api(`/api/ads?limit=${pageLimit}&offset=${pageOffset}`);
-    const campaigns = (listed.campaign_list || []).filter(item => item.campaign_id);
-    if (!campaigns.length) {
-      target.textContent = '本頁沒有廣告活動。';
-      return;
-    }
-    const joined = encodeURIComponent(campaigns.map(item => item.campaign_id).join(','));
-    const settings = await api(`/api/ads/settings?ids=${joined}`);
-    const [performanceResult, productsResult] = await Promise.allSettled([
-      api(`/api/ads/daily?ids=${joined}&startDate=${day}&endDate=${day}`),
+    const productsResult = (await Promise.allSettled([
       api('/api/items?status=NORMAL&status=UNLIST&status=BANNED&status=REVIEWING&pageSize=100'),
-    ]);
-    const settingsById = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
-    const metricsById = new Map((performanceResult.status === 'fulfilled'
-      ? performanceResult.value.campaign_list || [] : []).map(item => [String(item.campaign_id), item.metrics_list || []]));
+    ]))[0];
     const productById = new Map((productsResult.status === 'fulfilled'
       ? productsResult.value.item || [] : []).map(item => [String(item.item_id), item.item_status]));
     const rows = [];
     let needsReview = 0;
-    for (const listedCampaign of campaigns) {
+    let performanceUnavailable = false;
+    const scan = await scanCampaignPages({
+      startOffset: pageOffset, pageSize: pageLimit, maxPages: Number(maxPages.value),
+      fetchPage: ({ offset: nextOffset, limit: nextLimit }) => api(`/api/ads?limit=${nextLimit}&offset=${nextOffset}`),
+      onPage: async (campaigns, { page }) => {
+        target.textContent = `正在檢查第 ${page} 頁；已讀取 ${rows.length} 個活動…`;
+        if (!campaigns.length) return;
+        const joined = encodeURIComponent(campaigns.map(item => item.campaign_id).join(','));
+        const [settingsResult, performanceResult] = await Promise.allSettled([
+          api(`/api/ads/settings?ids=${joined}`),
+          api(`/api/ads/daily?ids=${joined}&startDate=${day}&endDate=${day}`),
+        ]);
+        if (settingsResult.status === 'rejected') throw settingsResult.reason;
+        const settings = settingsResult.value;
+        if (performanceResult.status === 'rejected') performanceUnavailable = true;
+        const settingsById = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
+        const metricsById = new Map((performanceResult.status === 'fulfilled'
+          ? performanceResult.value.campaign_list || [] : []).map(item => [String(item.campaign_id), item.metrics_list || []]));
+        for (const listedCampaign of campaigns) {
       const id = String(listedCampaign.campaign_id);
       const info = settingsById.get(id)?.common_info;
       if (!info) {
@@ -755,14 +768,16 @@ function appendHealthTool(container) {
         itemIds.join('、'), itemStates.join('；'),
         performanceResult.status === 'fulfilled' ? `${impressions}／${clicks}` : '—',
         findings.length ? findings.join('；') : '已檢查欄位未見異常']);
-    }
+        }
+      },
+    });
     table(target, ['活動 ID', '名稱', '狀態', '預算 TWD', '商品 ID', '商品狀態', '曝光／點擊', '檢查結果'], rows);
     target.prepend(node('p', 'query-summary',
-      `本頁檢查 ${campaigns.length} 個活動；${needsReview} 個需要核對設定或商品${listed.has_next_page ? '；後面還有活動，請調整起始位置' : ''}。`));
+      `已讀取 ${scan.pages} 頁、${scan.scanned} 個活動；${needsReview} 個需要核對設定或商品${scan.complete ? '。' : `；後面還有活動，請從位置 ${scan.nextOffset} 繼續。`}`));
     if (productsResult.status === 'fulfilled' && productsResult.value.has_next_page) {
       target.append(node('p', 'query-note', '商品清單只讀取前 100 件；未找到的商品狀態一律標為未確認。'));
     }
-    if (performanceResult.status === 'rejected' || productsResult.status === 'rejected') {
+    if (performanceUnavailable || productsResult.status === 'rejected') {
       target.append(node('p', 'query-note', '部分只讀資料暫時不可用；對應欄位已標為未確認。'));
     }
   }, '開始檢查');
