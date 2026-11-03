@@ -47,7 +47,7 @@ export const modules = [
   },
   {
     id: 'calculator', name: '利潤計算', icon: '🧮', features: [
-      { id: 'calculator-main', name: '利潤與 ROI 計算器', status: 'local', summary: '用售價、成本、費率、匯率及運費計算到手金額、利潤率和 ROI。', details: '計算完全在本機執行，沿用舊版公式並處理零售價和負利潤。', tool: 'calculator' },
+      { id: 'calculator-main', name: '利潤與 ROI 計算器', status: 'local', summary: '用售價、成本、費率、匯率及運費計算到手金額、利潤率和 ROI。', details: '計算完全在本機執行，沿用舊版公式並處理零售價和負利潤；輸入值保存在插件本機，彈窗與控制台共用。', tool: 'calculator' },
     ],
   },
 ];

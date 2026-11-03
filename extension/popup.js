@@ -9,6 +9,9 @@ const settingsLabels = {
   deliveryFee: '配送費 TWD', domesticShipping: '境內運費 CNY',
   freeShipping: '免運補貼 TWD', otherFee: '其他費 CNY',
 };
+const calculatorKeys = ['sellPrice', 'purchasePrice', 'weight', ...Object.keys(settingsLabels)];
+const calculatorValues = () => Object.fromEntries(calculatorKeys.map(key => [key, Number($(key).value)]));
+const saveCalculatorSettings = () => chrome.storage.local.set({ calculatorSettings: calculatorValues() });
 
 async function api(path, { method = 'GET', body } = {}) {
   const { pairToken } = await chrome.storage.local.get('pairToken');
@@ -77,8 +80,12 @@ async function checkHealth() {
 }
 
 async function initialize() {
-  const stored = await chrome.storage.local.get('pairToken');
+  const stored = await chrome.storage.local.get(['pairToken', 'calculatorSettings']);
   $('pair-token').value = stored.pairToken || '';
+  for (const key of ['sellPrice', 'purchasePrice', 'weight']) {
+    const saved = stored.calculatorSettings?.[key];
+    if (typeof saved === 'number' && Number.isFinite(saved) && saved >= 0) $(key).value = String(saved);
+  }
   for (const [key, label] of Object.entries(settingsLabels)) {
     const wrapper = document.createElement('label');
     wrapper.textContent = label;
@@ -87,9 +94,16 @@ async function initialize() {
     input.type = 'number';
     input.min = '0';
     input.step = '0.01';
-    input.value = DEFAULT_CALCULATOR_SETTINGS[key];
+    const saved = stored.calculatorSettings?.[key];
+    input.value = typeof saved === 'number' && Number.isFinite(saved) && saved >= 0
+      ? String(saved) : String(DEFAULT_CALCULATOR_SETTINGS[key]);
     wrapper.append(input);
     $('calculator-settings').append(wrapper);
+  }
+  for (const key of calculatorKeys) {
+    $(key).addEventListener('change', () => {
+      void saveCalculatorSettings().catch(error => showError(error, 'calculator-result'));
+    });
   }
   await checkHealth();
 }
@@ -150,13 +164,14 @@ $('load-ads').addEventListener('click', async () => {
   } catch (error) { showError(error); }
 });
 
-$('calculate').addEventListener('click', () => {
+$('calculate').addEventListener('click', async () => {
   try {
-    const values = { sellPrice: Number($('sellPrice').value), purchasePrice: Number($('purchasePrice').value), weight: Number($('weight').value) };
-    for (const key of Object.keys(settingsLabels)) values[key] = Number($(key).value);
+    const values = calculatorValues();
     const result = calculateProfit(values);
     $('calculator-result').className = 'results';
     $('calculator-result').textContent = `到手 CNY ${money(result.rmbValue)}\n總成本 CNY ${money(result.totalCost)}\n利潤 CNY ${money(result.profit)}\n利潤率 ${result.profitRate == null ? '—' : money(result.profitRate) + '%'}\nROI ${result.roi == null ? '—' : money(result.roi)}`;
+    try { await saveCalculatorSettings(); }
+    catch (error) { $('calculator-result').textContent += `\n設定未保存：${error.message || String(error)}`; }
   } catch (error) { showError(error, 'calculator-result'); }
 });
 

@@ -810,9 +810,29 @@ function appendCalculator(container) {
       min: '0', step: '0.01',
     });
   }
+  const readValues = () => Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, Number(input.value)]));
+  let editedBeforeLoad = false;
+  void chrome.storage.local.get('calculatorSettings').then(({ calculatorSettings }) => {
+    if (editedBeforeLoad) return;
+    for (const [key, input] of Object.entries(inputs)) {
+      const saved = calculatorSettings?.[key];
+      if (typeof saved === 'number' && Number.isFinite(saved) && saved >= 0) input.value = String(saved);
+    }
+  }).catch(error => { output.textContent = `計算設定暫時無法載入：${error.message || String(error)}`; });
+  for (const input of Object.values(inputs)) {
+    input.addEventListener('change', () => {
+      editedBeforeLoad = true;
+      void chrome.storage.local.set({ calculatorSettings: readValues() }).catch(error => {
+        output.textContent = `計算設定無法保存：${error.message || String(error)}`;
+      });
+    });
+  }
   runButton(panel, output, target => {
-    const values = Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, Number(input.value)]));
+    const values = readValues();
     const result = calculateProfit(values);
+    void chrome.storage.local.set({ calculatorSettings: values }).catch(error => {
+      target.textContent = `計算設定無法保存：${error.message || String(error)}`;
+    });
     target.textContent = `到手 CNY ${result.rmbValue.toFixed(2)}｜總成本 CNY ${result.totalCost.toFixed(2)}｜利潤 CNY ${result.profit.toFixed(2)}\n利潤率 ${result.profitRate == null ? '—' : result.profitRate.toFixed(2) + '%'}｜ROI ${result.roi == null ? '—' : result.roi.toFixed(2)}`;
   }, '計算');
   container.append(panel);
@@ -959,6 +979,20 @@ async function loadShopOverview() {
     : '資料來自已授權的臺灣沙盒店鋪。';
 }
 
+function renderBatchTaskSummary(run) {
+  const entries = Array.isArray(run?.entries) ? run.entries : [];
+  const processed = entries.filter(entry => entry.status !== 'pending' && entry.status !== 'not_sent');
+  const confirmed = entries.filter(entry => entry.status === 'verified');
+  const review = entries.filter(entry => ['sending', 'accepted', 'needs_review'].includes(entry.status));
+  $('task-total').textContent = String(entries.length);
+  $('task-processed').textContent = String(processed.length);
+  $('task-success').textContent = String(confirmed.length);
+  $('task-review').textContent = String(review.length);
+  $('task-last-record').textContent = run
+    ? `最近批量預算任務：測試店鋪 ${run.shopId}，目標每日預算 TWD ${run.targetBudget}。${confirmed.length} 個已讀回確認，${review.length} 個待核對。`
+    : '尚未開始任何批量任務。';
+}
+
 function visibleFeatures(module) {
   return module.id === 'ads' ? adsNavigation.map(id => featuresById.get(id)) : module.features;
 }
@@ -983,6 +1017,13 @@ function renderModule(module, preferredFeature) {
 }
 
 async function initialize() {
+  const { lastBatchBudgetRun } = await chrome.storage.local.get('lastBatchBudgetRun');
+  renderBatchTaskSummary(lastBatchBudgetRun);
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.lastBatchBudgetRun) {
+      renderBatchTaskSummary(changes.lastBatchBudgetRun.newValue);
+    }
+  });
   for (const module of modules) {
     const option = node('option', '', module.name);
     option.value = module.id;
