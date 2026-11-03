@@ -1,4 +1,4 @@
-# 原版 6.9.9 與 CF 0.9.3：UI／API 對照驗收
+# 原版 6.9.9 與 CF 0.9.5：UI／API 對照驗收
 
 依據使用者提供的 `shopee插件助手 10.2.zip`，核對原版 `popup.html`、`dashboard.html`、`topup.html`、`shipping-console.html`、`marketing-console.html`、`product-management.html` 及其 JS；新版依據 `extension/`、`open-platform/` 與臺灣沙盒店鋪實測記錄。本文件只記錄可證實的狀態。「有欄位」不等於「功能可用」，也不代表版面逐像素一致。
 
@@ -7,7 +7,7 @@
 | 畫面 | 原版 | CF 0.9.3 | 尚有差異 |
 |---|---|---|---|
 | 彈窗 | 7 個工具卡片、站點選擇、狀態；另有原作者帳號／授權系統 | 7 個工具卡片、TW 沙盒標籤、後端連線及授權狀態 | 工具卡片排版接近；原作者帳密系統未移植，改用 Shopee OAuth 和本機配對；多站點尚未做 |
-| 廣告控制台 | 12 個導航頁籤，專屬表單、任務進度和日誌 | 12 個導航入口；已逐項補參數預覽；部分頁籤有真正沙盒工具 | 原版各頁複雜的彈窗、篩選互動、分區細節及表格尚未完整重建；不能宣稱像素一致 |
+| 廣告控制台 | 12 個導航頁籤，專屬表單、任務進度和日誌 | 12 個導航入口；前 4 頁按原版主要分區重排，其餘頁有參數預覽；部分頁籤有真正沙盒工具 | 原版各頁複雜的彈窗、篩選互動、分區細節及表格尚未完整重建；不能宣稱像素一致 |
 | 預算水位線 | 多規則編輯、商品選擇器、時間窗、23:55 動作、日誌 | 同名參數預覽及本機規則計算 | 規則編輯、排程、持久任務與執行日誌未接入 |
 | 發貨／物流 | 備貨天數、物流、現貨預售、隔日達、贈品／SKU 聯動 | 5 個功能入口及對應參數預覽 | 商品選擇器、批量表格、進度、回復快照未重建 |
 | 行銷 | 組合促銷、折扣、滿額贈的獨立頁籤、參數與任務日誌 | 3 個入口及對應參數預覽 | 活動選擇、衝突提示、日誌未重建 |
@@ -15,6 +15,17 @@
 | 利潤計算器 | 本機輸入、計算、保存 | 本機計算、保存；彈窗與控制台共用 | 細部視覺與浮動模式尚未對齊 |
 
 ## 功能及 API 對照
+
+### 廣告控制台前四頁的原版欄位契約
+
+| 頁籤 | 原版輸入與操作 ID；CF 目前已建立相同 ID | 實際接通的行為 |
+|---|---|---|
+| 全店開啟廣告 | `daily-budget`、`exclude-ids`、`target-value`、`global-rapid-boost`、`start-process`、`start-system-roi`、`query-no-ads-products` | 只讀投放範圍預覽；兩種批量建立按鈕停用 |
+| 批量開廣告群組 | `group-roi-target`、`group-daily-budget`、`group-exclude-ids`、`btn-start-ad-groups` | 表單可檢視；建立按鈕停用，官方 GMV Max 尚未證實等價 |
+| CPC 監控自動重開 | `monitor-target-ids`、`monitor-cpc-threshold`、`monitor-roi-type`、`monitor-budget`、`monitor-roi-target`、`monitor-rapid-boost`、`monitor-reopen-delay`、`btn-start-cpc-monitor`、`btn-stop-cpc-monitor` | 下方可查績效；監控排程和重開按鈕停用 |
+| 批量刪除廣告 | `delete-exclude-ids`、`delete-only-ids`、`btn-delete-all`、`btn-delete-by-ids` | 表單可檢視；批量刪除按鈕停用 |
+
+相同 ID 和主要欄位順序方便後續逐項接線，但**不代表原版運作邏輯已移植**。CF 仍需要正式的 API 權限、批量任務、逐筆回查與沙盒驗收。
 
 | 模組 | 已在 CF 接通或實測 | 仍未達到原版能力 |
 |---|---|---|

@@ -197,11 +197,7 @@ function appendAllAdCandidates(container) {
       + (products.has_next_page ? ' 後面還有商品，請調整商品起始位置。' : '')));
   }, '預覽在架商品');
   container.append(panel);
-}
-
-function appendAllAdsTools(container) {
-  appendAllAdCandidates(container);
-  appendCampaignTool(container);
+  return panel;
 }
 
 function appendProductTool(container) {
@@ -856,11 +852,9 @@ function appendCalculator(container) {
 
 const tools = {
   campaigns: appendCampaignTool,
-  'all-ads': appendAllAdsTools,
   products: appendProductTool,
   'manual-ad': appendManualAdTool,
   'manual-edit': appendManualEditTools,
-  performance: appendPerformanceTool,
   'ad-filter': appendFilterTool,
   'ad-health': appendHealthTool,
   'budget-preview': appendBudgetPreview,
@@ -915,33 +909,7 @@ function previewTask(parent, title, description, buttonLabel) {
 function appendLegacyPreview(featureId, setup, execution) {
   const form = node('div', 'preview-grid');
   const tasks = node('div', 'task-grid');
-  if (featureId === 'ads-all') {
-    previewInput(form, '每日預算', '85', { unit: 'TWD' });
-    previewTextarea(form, '排除商品 ID（可選）', '不想開啟廣告的商品 ID；支援逗號、空格或換行分隔');
-    previewInput(form, '目標投入產出比（自訂 ROAS）', '30');
-    previewCheckbox(form, '啟用加速推廣（僅自訂 ROAS）');
-    previewTask(tasks, '全店開啟 · 自訂 ROAS', '按指定目標 ROAS 為未投放商品建立廣告。', '執行自訂 ROAS');
-    previewTask(tasks, '全店開啟 · 系統自動 ROAS', '由平台自動優化，僅處理符合資格的商品。', '執行系統自動 ROAS');
-  } else if (featureId === 'ads-groups') {
-    previewInput(form, '目標投入產出比', '30');
-    previewInput(form, '每日預算', '425', { unit: 'TWD' });
-    previewTextarea(form, '排除商品 ID（可選）', '用逗號、空格或換行分隔');
-    previewTask(tasks, '批量建立商品廣告群組', '自動排除已有廣告、零庫存和手動排除的商品。', '開始執行');
-  } else if (featureId === 'ads-cpc') {
-    previewTextarea(form, '指定商品 ID（可選）', '商品 ID；留空將處理全部');
-    previewInput(form, 'CPC 閾值', '5.00', { unit: 'TWD' });
-    previewInput(form, '重開類型', '全站推廣 · 自訂 ROAS', { type: 'text' });
-    previewInput(form, '預算', '85', { unit: 'TWD' });
-    previewInput(form, '手動 ROAS', '3.0');
-    previewInput(form, '重開延時', '立即重開', { type: 'text' });
-    previewTask(tasks, 'CPC 監控自動重開', '監控績效並在達到門檻時按設定重開。', '開始監控');
-    previewTask(tasks, '停止監控', '停止當前監控排程。', '停止監控');
-  } else if (featureId === 'ads-delete') {
-    previewTextarea(form, '排除的商品 ID（這些不刪）', '用逗號、空格或換行分隔，按 item_id 排除');
-    previewTask(tasks, '按排除 ID 刪除', '刪除全部進行中的廣告，排除指定的商品。', '刪除廣告');
-    previewTextarea(form, '要刪除的商品 ID（支持多 ID）', '用逗號、空格或換行分隔');
-    previewTask(tasks, '按指定 ID 刪除', '只刪除指定商品 ID 的廣告。', '按 ID 刪除');
-  } else if (featureId === 'products-bulk') {
+  if (featureId === 'products-bulk') {
     previewTextarea(form, '指定商品 ID（可選，多 ID）', '留空代表全部；逗號、空格或換行分隔');
     previewTextarea(form, '排除商品 ID（可選，多 ID）', '逗號、空格或換行分隔');
     previewSelect(form, '操作類型', ['刪除全部商品', '刪除已下架商品', '上架未上架商品', '下架已上架商品']);
@@ -1001,7 +969,7 @@ function appendLegacyPreview(featureId, setup, execution) {
     previewTask(tasks, '批量篩選與處理', '原版含預覽、匯出及確認刪除。下方只讀工具已接入部分條件。', '確認刪除');
   } else if (featureId === 'ads-health') {
     previewSelect(form, '狀態過濾', ['僅進行中', '全部狀態']);
-    previewTask(tasks, '廣告健康檢查', '原版會分頁掃描全部活動並標記異常。下方只讀工具目前僅檢查一頁。', '全店檢查');
+    previewTask(tasks, '廣告健康檢查', '原版會分頁掃描全部活動並標記異常。下方只讀工具目前最多檢查 10 頁。', '全店檢查');
   } else if (featureId === 'products-title') {
     previewTextarea(form, '商品 ID 列表（可選）', '逗號、空格或換行分隔');
     previewInput(form, '搜尋關鍵詞', '', { type: 'text' });
@@ -1075,6 +1043,215 @@ function appendLegacyPreview(featureId, setup, execution) {
   return true;
 }
 
+function workflowHeading(number, title, description) {
+  const heading = node('div', 'workflow-heading');
+  const text = node('div');
+  text.append(node('h3', '', title), node('p', '', description));
+  heading.append(node('span', 'step-number', String(number)), text);
+  return heading;
+}
+
+function allShopField(labelText, id, value, help, { textarea = false, unit = '', min, max, step, wide = false } = {}) {
+  const wrapper = node('div', `parameter-field${wide ? ' wide-field' : ''}`);
+  const label = node('label', '', labelText);
+  label.htmlFor = id;
+  const inputWrap = node('div', unit ? 'input-with-unit' : '');
+  const input = node(textarea ? 'textarea' : 'input');
+  input.id = id;
+  if (textarea) { input.rows = 3; input.placeholder = value; }
+  else { input.type = 'number'; input.value = value; if (min !== undefined) input.min = min; if (max !== undefined) input.max = max; if (step !== undefined) input.step = step; }
+  inputWrap.append(input);
+  if (unit) inputWrap.append(node('span', '', unit));
+  wrapper.append(label, inputWrap, node('p', '', help));
+  return wrapper;
+}
+
+function allShopTask(title, tag, description, hint, buttonText, className, icon) {
+  const card = node('article', `task-choice-card ${className}`);
+  const top = node('div', 'task-choice-top');
+  top.append(node('span', 'task-icon', icon), node('span', 'task-tag', tag));
+  const button = node('button', 'task-primary-btn', buttonText);
+  button.type = 'button';
+  button.disabled = true;
+  button.title = '批量建立尚未接入已驗證的官方 API';
+  card.append(top, node('h4', '', title), node('p', '', description),
+    node('div', 'task-parameter-hint', hint), button);
+  return card;
+}
+
+function appendAllShopLayout(detail, feature) {
+  const setup = node('section', 'workflow-card all-shop-setup');
+  setup.append(workflowHeading(1, '設定任務參數', '帶「必填」的參數會影響建立結果，可選項可保持預設。'));
+  const core = node('div', 'parameter-section');
+  const coreHead = node('div', 'parameter-section-head');
+  coreHead.append(node('strong', '', '核心參數'), node('small', '', '執行兩種建立任務時都會讀取'));
+  const coreGrid = node('div', 'parameter-grid');
+  coreGrid.append(allShopField('每日預算 · 必填', 'daily-budget', '85', '每個新廣告每天可使用的預算。', { min: '40', unit: 'TWD' }),
+    allShopField('排除商品 ID · 可選', 'exclude-ids', '不想開啟廣告的商品 ID；支援逗號、空格或換行分隔', '留空不額外排除；已有廣告的商品仍會自動跳過。', { textarea: true, wide: true }));
+  core.append(coreHead, coreGrid);
+  const roi = node('div', 'parameter-section manual-roi-settings');
+  const roiHead = node('div', 'parameter-section-head');
+  roiHead.append(node('strong', '', '自訂 ROI 專用參數'), node('small', '', '只在自訂 ROI 任務中使用'));
+  const roiRow = node('div', 'manual-settings-row');
+  roiRow.append(allShopField('目標投入產出比 · 必填', 'target-value', '30', '原版目標 ROI 範圍為 1–50。', { min: '1', max: '50' }));
+  const boost = node('label', 'switch-field');
+  const boostCheck = node('input');
+  boostCheck.type = 'checkbox';
+  boostCheck.id = 'global-rapid-boost';
+  const boostText = node('span');
+  boostText.append(node('strong', '', '啟用加速推廣'), node('small', '', '僅適用於自訂 ROI；系統自動 ROI 不使用。'));
+  boost.append(boostCheck, node('span', 'switch-visual'), boostText);
+  roiRow.append(boost);
+  roi.append(roiHead, roiRow);
+  setup.append(core, roi);
+
+  const execution = node('section', 'workflow-card all-shop-actions');
+  execution.append(workflowHeading(2, '選擇要執行的任務', '兩個建立任務只需選一個執行，參數用途分別標示。'));
+  const choices = node('div', 'task-choice-grid');
+  const manualTask = allShopTask('全店開啟 · 自訂 ROI', '使用預算＋目標 ROI',
+    '按上方目標 ROI，為未開廣告商品批量建立活動。',
+    '讀取：每日預算、目標 ROI、排除 ID、加速推廣', '執行自訂 ROI', 'manual-task-card', '🎯');
+  const systemTask = allShopTask('全店開啟 · 系統自動 ROI', '不使用目標 ROI',
+    '由平台自動競價，為符合資格的商品建立活動。',
+    '讀取：每日預算、排除 ID', '執行系統自動 ROI', 'system-task-card', '✨');
+  manualTask.querySelector('button').id = 'start-process';
+  systemTask.querySelector('button').id = 'start-system-roi';
+  choices.append(manualTask, systemTask);
+  execution.append(choices);
+  const helper = node('div', 'helper-tool-card');
+  const helperCopy = node('div');
+  helperCopy.append(node('strong', '', '執行前想先確認範圍？'),
+    node('p', '', '查詢在架商品是否已出現在廣告活動，不會修改資料。'));
+  const query = node('button', 'helper-query-btn', '僅查詢商品');
+  query.type = 'button';
+  query.id = 'query-no-ads-products';
+  helper.append(node('span', 'helper-tool-icon', '⌕'), helperCopy, query);
+  const note = node('div', 'parameter-section all-shop-status');
+  note.append(node('strong', '', '目前 API 對接進度'), node('p', '', feature.details));
+  detail.append(setup, execution, helper, note);
+  const candidatePanel = appendAllAdCandidates(detail);
+  appendCampaignTool(detail);
+  query.addEventListener('click', () => {
+    candidatePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    candidatePanel.querySelector('.run-button')?.click();
+  });
+}
+
+function appendAdGroupsLayout(detail, feature) {
+  const form = node('section', 'workflow-card ad-groups-layout');
+  form.append(node('p', 'group-intro', '自動取得未開廣告且有庫存的在架商品，每 30 件商品建立一個廣告群組。'));
+  const row = node('div', 'group-parameter-row');
+  row.append(allShopField('目標投入產出比', 'group-roi-target', '30', '廣告群組僅支援手動 ROI，原版範圍 1–50。', { min: '1', max: '50', step: '0.1' }),
+    allShopField('每日預算', 'group-daily-budget', '425', '原版廣告群組每日預算最低 TWD 425。', { min: '425', unit: 'TWD', step: '1' }));
+  form.append(row, allShopField('排除商品 ID（可選）', 'group-exclude-ids', '用逗號、空格或換行分隔', '不在建立範圍內的商品。', { textarea: true, wide: true }));
+  form.append(node('div', 'group-info', '原版會在建立前核對 ROI、預算、優惠券估算及重疊廣告；最後一組少於 30 件也會建立。'));
+  const action = node('div', 'group-action-row');
+  const text = node('div');
+  text.append(node('strong', '', '批量建立商品廣告群組'), node('p', '', '排除已有廣告、零庫存及手動排除的商品。'));
+  const button = node('button', 'task-primary-btn', '開始執行');
+  button.type = 'button';
+  button.disabled = true;
+  button.id = 'btn-start-ad-groups';
+  button.title = '官方店鋪 GMV Max 尚未證實等同原版 30 件商品群組';
+  action.append(text, button);
+  form.append(action);
+  const note = node('div', 'parameter-section all-shop-status');
+  note.append(node('strong', '', 'API 對接進度'), node('p', '', feature.details));
+  detail.append(form, note);
+}
+
+function appendCpcMonitorLayout(detail, feature) {
+  const form = node('section', 'workflow-card cpc-monitor-layout');
+  form.append(node('p', 'group-intro', '自動監控單點花費，超過閾值時刪除並重開廣告。'));
+  const row1 = node('div', 'group-parameter-row');
+  row1.append(allShopField('指定商品 ID（可選）', 'monitor-target-ids', '商品 ID；留空監控全部', '', { textarea: true }),
+    allShopField('CPC 閾值', 'monitor-cpc-threshold', '5.00', '單點花費超過此值時觸發。', { min: '0.01', unit: 'TWD', step: '0.01' }));
+  const row2 = node('div', 'group-parameter-row');
+  const type = node('label', 'cpc-select-field', '重開類型');
+  const select = node('select');
+  select.id = 'monitor-roi-type';
+  for (const [value, label] of [['auto', '全站推廣 · 系統自動最佳化'], ['manual', '全站推廣 · 自訂 ROI']]) {
+    const option = node('option', '', label);
+    option.value = value;
+    select.append(option);
+  }
+  select.value = 'manual';
+  type.append(select);
+  row2.append(type, allShopField('預算', 'monitor-budget', '85', '重開後的每日預算。', { min: '20', unit: 'TWD', step: '5' }));
+  const row3 = node('div', 'group-parameter-row');
+  row3.append(allShopField('手動 ROI 值（僅手動模式）', 'monitor-roi-target', '3.0', '', { min: '0.1', step: '0.1' }));
+  const boost = node('label', 'cpc-checkbox-field');
+  const checkbox = node('input');
+  checkbox.type = 'checkbox';
+  checkbox.id = 'monitor-rapid-boost';
+  boost.append(checkbox, node('span', '', '重開時啟用加速推廣'));
+  row3.append(boost);
+  const row4 = node('div', 'group-parameter-row');
+  const delay = node('label', 'cpc-select-field', '重開延時時間');
+  const delaySelect = node('select');
+  delaySelect.id = 'monitor-reopen-delay';
+  for (const [value, label] of [['0', '立即重開'], ['10', '10 分鐘後'], ['20', '20 分鐘後'],
+    ['30', '30 分鐘後'], ['60', '1 小時後'], ['120', '2 小時後'], ['180', '3 小時後']]) {
+    const option = node('option', '', label);
+    option.value = value;
+    delaySelect.append(option);
+  }
+  delay.append(delaySelect, node('small', '', '原版刪除立即執行，重開可延時。'));
+  row4.append(delay, node('div', 'group-info', '💡 原版監控會持續檢查花費，觸發時按設定延時重開。'));
+  form.append(row1, row2, row3, row4);
+  const actions = node('div', 'cpc-action-row');
+  for (const label of ['開始監控', '停止監控']) {
+    const button = node('button', 'task-primary-btn', label);
+    button.type = 'button';
+    button.disabled = true;
+    button.id = label === '開始監控' ? 'btn-start-cpc-monitor' : 'btn-stop-cpc-monitor';
+    button.title = 'CPC 監控排程與刪除重建尚未完成沙盒驗證';
+    actions.append(button);
+  }
+  form.append(actions);
+  const note = node('div', 'parameter-section all-shop-status');
+  note.append(node('strong', '', 'API 對接進度'), node('p', '', feature.details));
+  detail.append(form, note);
+  appendPerformanceTool(detail);
+}
+
+function appendDeleteAdsLayout(detail, feature) {
+  const form = node('section', 'workflow-card delete-ads-layout');
+  const sections = [
+    ['delete-exclude-ids', '排除的商品 ID（這些不刪）',
+      '逗號、空格或換行分隔；按 item_id 排除', '🧹 按排除 ID 刪除',
+      '刪除全部進行中的廣告，排除指定商品。', '刪除廣告'],
+    ['delete-only-ids', '要刪除的商品 ID（支援多 ID）',
+      '逗號、空格或換行分隔；只刪除指定商品對應的進行中廣告',
+      '🗑️ 按指定 ID 刪除', '只刪除指定商品 ID 的廣告。', '按 ID 刪除'],
+  ];
+  for (const [id, label, placeholder, title, description, buttonText] of sections) {
+    const fieldWrap = node('label', 'delete-ads-field', label);
+    const textarea = node('textarea');
+    textarea.id = id;
+    textarea.placeholder = placeholder;
+    fieldWrap.append(textarea);
+    form.append(fieldWrap);
+    if (id === 'delete-exclude-ids') {
+      form.append(node('p', 'query-note', '原版只刪除「進行中」廣告；排除列表內的 item_id 不刪除。'));
+    }
+    const action = node('div', 'group-action-row');
+    const info = node('div');
+    info.append(node('strong', '', title), node('p', '', description));
+    const button = node('button', 'task-primary-btn', buttonText);
+    button.type = 'button';
+    button.disabled = true;
+    button.id = id === 'delete-exclude-ids' ? 'btn-delete-all' : 'btn-delete-by-ids';
+    button.title = '批量刪除尚未完成預覽、逐筆確認與沙盒驗證';
+    action.append(info, button);
+    form.append(action);
+    if (id === 'delete-exclude-ids') form.append(node('hr', 'delete-ads-divider'));
+  }
+  const note = node('div', 'parameter-section all-shop-status');
+  note.append(node('strong', '', 'API 對接進度'), node('p', '', feature.details));
+  detail.append(form, note);
+}
+
 function renderFeature(feature) {
   activeFeature = feature;
   const detail = $('feature-detail');
@@ -1083,6 +1260,38 @@ function renderFeature(feature) {
   $('module-summary').textContent = feature.summary;
   const badge = node('span', `status ${statuses[feature.status].className}`, statuses[feature.status].label);
   detail.append(badge);
+  if (feature.id === 'ads-all') {
+    appendAllShopLayout(detail, feature);
+    for (const button of document.querySelectorAll('.nav-link')) {
+      button.classList.toggle('active', button.dataset.feature === feature.id);
+    }
+    location.hash = `${activeModule.id}/${feature.id}`;
+    return;
+  }
+  if (feature.id === 'ads-groups') {
+    appendAdGroupsLayout(detail, feature);
+    for (const button of document.querySelectorAll('.nav-link')) {
+      button.classList.toggle('active', button.dataset.feature === feature.id);
+    }
+    location.hash = `${activeModule.id}/${feature.id}`;
+    return;
+  }
+  if (feature.id === 'ads-cpc') {
+    appendCpcMonitorLayout(detail, feature);
+    for (const button of document.querySelectorAll('.nav-link')) {
+      button.classList.toggle('active', button.dataset.feature === feature.id);
+    }
+    location.hash = `${activeModule.id}/${feature.id}`;
+    return;
+  }
+  if (feature.id === 'ads-delete') {
+    appendDeleteAdsLayout(detail, feature);
+    for (const button of document.querySelectorAll('.nav-link')) {
+      button.classList.toggle('active', button.dataset.feature === feature.id);
+    }
+    location.hash = `${activeModule.id}/${feature.id}`;
+    return;
+  }
   const setup = node('section', 'workflow-card');
   const setupHead = node('div', 'workflow-heading');
   const setupText = node('div');
