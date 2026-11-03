@@ -1,0 +1,9 @@
+legacy-extension/
+.env
+**/.env
+**/node_modules/
+**/coverage/
+open-platform/data/
+**/tokens.json
+dist/
+
