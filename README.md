@@ -38,4 +38,17 @@ node scripts/build-extension.js
 
 本機後端需要環境變數 `SHOPEE_PARTNER_ID`、`SHOPEE_PARTNER_KEY`、`SHOPEE_SHOP_ID`、`SHOPEE_REDIRECT_URL`、`SHOPEE_VAULT_KEY_BASE64`，然後執行 `node bin/server.js`。它只綁定 `127.0.0.1:8787`，啟動時會產生插件配對碼。不要把 Partner Key 或 Token 寫進插件或提交到版本庫。詳細步驟見[本機沙盒使用說明](docs/local-sandbox.md)。
 
+## 在另一台電腦接續
+
+在新電腦安裝 Git、Node.js 和 Chrome，然後下載這個倉庫：
+
+```powershell
+git clone https://github.com/chgptuser003-GH/jiejiejie.git
+cd jiejiejie\open-platform
+node --test
+node scripts/build-extension.js
+```
+
+在 Chrome 的擴充功能管理頁開啟開發人員模式，選擇倉庫中的 `dist/extension/` 作為未封裝擴充功能。新電腦再執行 `scripts/start-sandbox.ps1`，在本機視窗輸入 CF 測試 Partner Key，將視窗顯示的配對碼填入插件，並重新授權沙盒店鋪。舊電腦的 Token Vault 受 Windows 使用者加密保護，**不會隨 GitHub 倉庫轉移**；這是正常情況。不要把 Partner Key、Token 或配對碼提交到 Git。
+
 CF App 已通過商品列表、廣告活動列表／設定／績效的沙盒讀取，以及單件手動選品廣告建立、預算修改和暫停／恢復。`auto` 競價活動的目標 ROAS 修改遭沙盒拒絕；刪除、批量和其他 Ads 端點尚未驗證。後續逐項驗證商品、物流、行銷與廣告寫入功能，再建立批量任務與排程。

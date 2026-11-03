@@ -35,4 +35,8 @@ Chrome 的「管理擴充功能」開啟開發人員模式後，可選擇 `dist/
 
 執行 `node bin/server.js` 後，後端只監聽 `http://127.0.0.1:8787`。把後端顯示的**配對碼**輸入插件；配對碼不是 Shopee Partner Key。授權測試店鋪後，插件可發出只讀查詢。Token 會加密儲存在後端 `data/tokens.json`，插件只保存配對碼。
 
-本地檔案式 Token Vault 適用於單進程開發。正式部署還需 HTTPS 後端、資料庫／密鑰管理、任務排程、日誌和監控。公開倉庫前應選定開源授權，並確認舊插件原作者允許的公開範圍。
+本地檔案式 Token Vault 適用於單進程開發。正式部署還需 HTTPS 後端、資料庫／密鑰管理、任務排程、日誌和監控。GitHub 倉庫目前公開，但尚未加入 `LICENSE`；在選定授權條款前，不應將原始碼標為已完成開源授權。舊插件原碼沒有上傳。
+
+## 換電腦時
+
+從 [GitHub 倉庫](https://github.com/chgptuser003-GH/jiejiejie) 下載原始碼，在新電腦的 `open-platform/` 執行 `node --test` 及 `node scripts/build-extension.js`，再把該電腦的 `dist/extension/` 載入 Chrome。執行 `scripts/start-sandbox.ps1` 時，只在新電腦視窗輸入測試 Partner Key；使用新產生的配對碼連接插件，並重新授權沙盒店鋪。舊電腦 `%LOCALAPPDATA%/CF-Shopee-Assistant/` 中的加密 Token 與配對資料不可直接複製到新電腦使用。
