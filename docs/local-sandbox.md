@@ -14,7 +14,7 @@ node scripts/build-extension.js
 Chrome 的「管理擴充功能」開啟開發人員模式後，可選擇 `dist/extension/` 作為未封裝擴充功能載入。這是本地開發安裝，尚未發佈到 Chrome 線上應用程式商店。
 已載入舊版 `dist/extension/` 的使用者，重新建置後到 `chrome://extensions` 按該擴充功能的「重新載入」，再打開彈窗並點「開啟控制台」。
 
-本機 Chrome 目前使用 `C:\Users\aa\Desktop\extension` 作為未封裝插件目錄。2026-11-03 已將 0.9.1 建置檔同步到該目錄；Chrome 仍需在 `chrome://extensions` 對「CF 蝦皮營運助手（測試版）」按一次「重新載入」，才會顯示新版。
+本機 Chrome 目前使用 `C:\Users\aa\Desktop\extension` 作為未封裝插件目錄。2026-11-03 已將 0.9.2 建置檔同步到該目錄；Chrome 仍需在 `chrome://extensions` 對「CF 蝦皮營運助手（測試版）」按一次「重新載入」，才會顯示新版。
 
 ## 後端配置
 

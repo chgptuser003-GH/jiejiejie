@@ -820,10 +820,11 @@ function appendCalculator(container) {
     }
   }).catch(error => { output.textContent = `計算設定暫時無法載入：${error.message || String(error)}`; });
   for (const input of Object.values(inputs)) {
+    input.addEventListener('input', () => { editedBeforeLoad = true; });
     input.addEventListener('change', () => {
       editedBeforeLoad = true;
       void chrome.storage.local.set({ calculatorSettings: readValues() }).catch(error => {
-        output.textContent = `計算設定無法保存：${error.message || String(error)}`;
+        output.textContent += `\n計算設定無法保存：${error.message || String(error)}`;
       });
     });
   }
@@ -831,7 +832,7 @@ function appendCalculator(container) {
     const values = readValues();
     const result = calculateProfit(values);
     void chrome.storage.local.set({ calculatorSettings: values }).catch(error => {
-      target.textContent = `計算設定無法保存：${error.message || String(error)}`;
+      target.textContent += `\n計算設定無法保存：${error.message || String(error)}`;
     });
     target.textContent = `到手 CNY ${result.rmbValue.toFixed(2)}｜總成本 CNY ${result.totalCost.toFixed(2)}｜利潤 CNY ${result.profit.toFixed(2)}\n利潤率 ${result.profitRate == null ? '—' : result.profitRate.toFixed(2) + '%'}｜ROI ${result.roi == null ? '—' : result.roi.toFixed(2)}`;
   }, '計算');
