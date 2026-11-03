@@ -1,0 +1,14 @@
+{
+  "name": "shopee-open-platform-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "node bin/server.js",
+    "build:extension": "node scripts/build-extension.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

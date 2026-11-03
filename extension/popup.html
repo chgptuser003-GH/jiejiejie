@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="style.css">
+  <title>CF 蝦皮營運助手</title>
+</head>
+<body>
+  <div class="app-container">
+    <header class="toolbox-header">
+      <div class="brand"><span class="brand-icon">▣</span><strong>營運工具箱</strong></div>
+      <span class="site-selector"><b>TW</b> 沙盒測試</span>
+    </header>
+    <main>
+      <div class="function-grid" aria-label="功能模組">
+        <button class="function-card" id="open-flash" type="button"><span class="function-icon tone-fs">FS</span><span><strong>限時特賣助手</strong><small>活動續期與管理</small></span></button>
+        <button class="function-card" id="open-shipping" type="button"><span class="function-icon tone-dts">DTS</span><span><strong>商品改天數</strong><small>現貨預售與物流設定</small></span></button>
+        <button class="function-card" id="open-calculator" type="button"><span class="function-icon tone-roi">ROI</span><span><strong>利潤計算器 Pro</strong><small>利潤、利潤率與 ROI</small></span></button>
+        <button class="function-card featured" id="open-dashboard" type="button"><span class="function-icon tone-ad">AD</span><span><strong>批量廣告控制台</strong><small>全店投放、ROAS 與 CPC</small></span></button>
+        <button class="function-card" id="open-budget" type="button"><span class="function-icon tone-bgt">BGT</span><span><strong>預算水位線控制台</strong><small>依廣告消耗追加預算</small></span></button>
+        <button class="function-card" id="open-products" type="button"><span class="function-icon tone-sku">SKU</span><span><strong>店鋪商品管理</strong><small>批量操作與標題修改</small></span></button>
+        <button class="function-card" id="open-marketing" type="button"><span class="function-icon tone-mkt">MKT</span><span><strong>店鋪營銷活動</strong><small>組合、折扣與贈品</small></span></button>
+        <div class="function-card placeholder"><span class="function-icon tone-more">＋</span><span><strong>探索更多工具</strong><small>功能按原版逐項對接中</small></span></div>
+      </div>
+      <div class="state-section"><span>◉ 當前狀態：</span><strong id="status" role="status">檢查本機後端中…</strong></div>
+      <div class="expiry-section"><span>◷ 店鋪授權：</span><strong id="auth-status">尚未完成測試店鋪授權</strong></div>
+      <details class="connection-tools">
+        <summary>連線設定與測試工具</summary>
+        <div class="tools-body">
+          <p class="muted">店鋪操作需先連接本機後端；未完成項目只顯示開發狀態。</p>
+          <label for="pair-token">本機配對碼</label>
+          <input id="pair-token" type="password" autocomplete="off" placeholder="貼上後端顯示的配對碼">
+          <div class="actions"><button id="save-pair">儲存配對碼</button><button id="authorize" class="secondary">授權測試店鋪</button></div>
+          <div class="actions"><button id="load-items" class="secondary">查看在架商品</button><button id="load-ads" class="secondary">查看廣告活動</button></div>
+          <div id="results" class="results" aria-live="polite">授權後可讀取測試店鋪資料。</div>
+          <details class="inline-calculator">
+            <summary>快速利潤計算</summary>
+            <div class="grid">
+              <label>售價 TWD<input id="sellPrice" type="number" min="0" step="0.01" value="460"></label>
+              <label>採購價 CNY<input id="purchasePrice" type="number" min="0" step="0.01" value="40"></label>
+              <label>重量 kg<input id="weight" type="number" min="0" step="0.01" value="0.5"></label>
+            </div>
+            <details><summary>費率、匯率與其他成本</summary><div class="grid" id="calculator-settings"></div></details>
+            <button id="calculate">計算</button>
+            <div id="calculator-result" class="results" aria-live="polite"></div>
+          </details>
+        </div>
+      </details>
+    </main>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

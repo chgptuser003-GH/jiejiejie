@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="dashboard.css">
+  <title>CF 蝦皮營運助手 · 控制台</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="logo-container"><span class="logo-icon">S</span><strong>CF 蝦皮營運助手 · 控制台</strong></div>
+    <div class="console-actions">
+      <button id="reload-page" type="button">⟳ 刷新頁面</button>
+      <button id="open-seller" type="button">↗ 打開賣家中心</button>
+    </div>
+    <div class="header-context">
+      <label class="module-picker">功能模組 <select id="module-picker"></select></label>
+      <span class="header-chip">TW 沙盒測試</span>
+      <span class="header-chip" id="connection">檢查連線中…</span>
+    </div>
+  </header>
+  <div class="main-wrapper">
+    <aside class="sidebar" aria-label="功能選單">
+      <nav id="module-nav"></nav>
+      <p class="sidebar-note">此頁保留原版排版。未接入的操作會標明狀態，不能直接修改店鋪。</p>
+    </aside>
+    <main class="content-area">
+      <section class="page-section">
+        <div class="page-head">
+          <div class="page-icon" id="module-icon">📣</div>
+          <div><h1 id="module-heading">廣告管理</h1><p id="module-summary"></p></div>
+        </div>
+        <article id="feature-detail" aria-live="polite"></article>
+      </section>
+    </main>
+  </div>
+  <aside class="fixed-panel" id="console-panel" aria-label="控制台資訊">
+    <div class="panel-header"><strong>控制台資訊</strong><button id="panel-toggle" type="button" aria-label="收合資訊面板">−</button></div>
+    <div class="panel-body">
+      <section class="panel-section"><h2>🏪 沙盒店鋪實況</h2><div class="stats shop-stats">
+        <div><strong id="shop-item-count">—</strong><small>在架商品</small></div>
+        <div><strong id="shop-ad-count">—</strong><small>本頁廣告活動</small></div>
+      </div><p id="shop-overview-status">正在讀取已授權店鋪資料…</p></section>
+      <section class="panel-section"><h2>📊 任務統計</h2><div class="stats">
+        <div><strong>0</strong><small>總商品數</small></div><div><strong>0</strong><small>已處理</small></div>
+        <div><strong>0</strong><small>成功</small></div><div><strong>0</strong><small>失敗</small></div>
+      </div></section>
+      <section class="panel-section"><h2>📈 進度</h2><p id="progress">正在載入功能狀態…</p></section>
+      <section class="panel-section"><h2>📋 任務紀錄</h2><p>尚未開始任何批量任務。</p></section>
+    </div>
+  </aside>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>

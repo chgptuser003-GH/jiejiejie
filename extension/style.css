@@ -1,0 +1,42 @@
+:root { font: 13px/1.45 "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif; color: #202a3b; background: #f5f8fc; }
+* { box-sizing: border-box; }
+body { width: 480px; height: 600px; margin: 0; overflow: hidden; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+.app-container { width: 100%; height: 100%; background: #f8fafc; }
+.toolbox-header { min-height: 72px; padding: 14px 20px; background: white; color: #e94627; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #d4ebfa; }
+.brand { display: flex; gap: 10px; align-items: center; font-size: 18px; }
+.brand-icon { display: grid; place-items: center; width: 30px; height: 30px; color: #ed4d2d; font-size: 22px; font-weight: 800; }
+.site-selector { border: 1px solid #dce1e8; border-radius: 10px; padding: 6px 9px; white-space: nowrap; background: white; color: #34445a; box-shadow: 0 2px 6px #14233a10; }
+.site-selector b { color: white; background: #e83f29; padding: 2px 4px; border-radius: 3px; font-size: 10px; }
+main { height: calc(100% - 72px); overflow-y: auto; padding: 12px 20px 22px; }
+.section-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 15px; border-bottom: 2px solid #d4ebfa; padding-bottom: 9px; }
+h1 { color: #e94828; font-size: 20px; margin: 0; }
+.section-heading small { color: #8490a0; }
+.function-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.function-card { min-width: 0; min-height: 80px; display: flex; align-items: center; gap: 10px; border: 1px solid #e7e9ed; border-radius: 14px; background: white; padding: 10px 11px; text-align: left; box-shadow: 0 4px 11px #18223a12; color: #142237; }
+.function-card:hover, .function-card:focus-visible { border-color: #f09b82; box-shadow: 0 5px 15px #ee4d2d22; }
+.function-card.featured { border-color: #f1b3a6; }
+.function-card.placeholder { border-style: dashed; box-shadow: none; color: #687689; }
+.function-card strong { display: block; font-size: 13px; white-space: nowrap; }
+.function-card small { display: block; margin-top: 4px; color: #75849a; font-size: 10px; line-height: 1.3; }
+.function-icon { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; color: white; font-size: 12px; font-weight: 800; box-shadow: 0 5px 10px #15223a22; }
+.tone-fs { background: linear-gradient(135deg, #fc718e, #ec1e57); }.tone-dts { background: linear-gradient(135deg, #37c6c3, #059f9b); }
+.tone-roi { background: linear-gradient(135deg, #39cf94, #05a66c); }.tone-ad { background: linear-gradient(135deg, #57b6ff, #1678e8); }
+.tone-bgt { background: linear-gradient(135deg, #8f8cff, #554cea); }.tone-sku { background: linear-gradient(135deg, #ffbc35, #ee8b05); }
+.tone-mkt { background: linear-gradient(135deg, #ff6f91, #e92756); }.tone-more { background: #e9edf3; color: #7a8799; box-shadow: none; font-size: 24px; }
+.state-section, .expiry-section { margin-top: 14px; border: 1px solid #ccefe2; border-radius: 8px; background: #e9fbf3; padding: 10px 12px; display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.state-section strong { color: #04945e; text-align: right; }.state-section strong.error { color: #c5322a; }
+.state-section.offline { border-color: #f3c3bb; background: #fff1ee; }
+.expiry-section { margin-top: 8px; border-color: #cbe4f8; background: #eaf5ff; }.expiry-section strong { color: #405973; text-align: right; }
+.connection-tools { margin-top: 14px; border-top: 1px solid #e1e6ed; padding-top: 11px; }
+.connection-tools > summary, .inline-calculator > summary { cursor: pointer; color: #e04a2e; font-weight: 700; }
+.tools-body { padding-top: 8px; }.muted { color: #6d798b; font-size: 11px; margin: 4px 0 11px; }
+label { display: block; font-size: 11px; font-weight: 700; margin: 7px 0; }
+input { width: 100%; min-height: 34px; margin-top: 4px; border: 1px solid #cbd4df; border-radius: 6px; padding: 6px 8px; background: white; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 9px 0; }
+.actions button, #calculate { border: 1px solid #ee4d2d; background: #ee4d2d; color: white; border-radius: 6px; padding: 7px 10px; font-size: 11px; font-weight: 700; }
+.actions button.secondary { background: white; color: #c74327; }
+.results { white-space: pre-wrap; overflow-wrap: anywhere; background: #f4f7fa; border: 1px solid #e3e8ee; border-radius: 6px; padding: 8px; font-size: 11px; max-height: 125px; overflow-y: auto; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }.inline-calculator { margin-top: 13px; }.inline-calculator details { margin: 9px 0; }
+.error { color: #b91c1c; }.success { color: #047857; }
