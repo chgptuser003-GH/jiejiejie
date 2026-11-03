@@ -166,3 +166,23 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 @media (max-width: 1150px) { .legacy-filter-columns, .legacy-metric-grid { grid-template-columns: 1fr; } }
 .legacy-title-selected { margin-top: 20px; }.legacy-title-selected .output { margin-bottom: 14px; }
 .legacy-keywords .run-button { margin: 0 7px 12px 0; }
+.budget-rules-layout > .group-intro { margin-bottom: 13px; }
+.budget-rule-list { display: grid; gap: 14px; margin-top: 13px; }
+.budget-rule-row { padding: 14px; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; }
+.budget-rule-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.budget-rule-head h3 { margin: 0 0 10px; }
+.budget-rule-top { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.budget-rule-bottom { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+.budget-rule-column { min-width: 0; padding: 13px; border: 1px solid #e3e8ef; border-radius: 7px; background: #fbfcfe; }
+.budget-rule-column h4 { margin: 0 0 10px; color: #344156; }
+.budget-rule-field { display: block; margin: 10px 0; color: #354157; font-size: 11px; font-weight: 700; }
+.budget-rule-field input, .budget-rule-field textarea { display: block; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; background: white; color: #25334a; font: inherit; font-weight: 400; }
+.budget-rule-field input { min-height: 36px; }.budget-rule-field textarea { min-height: 72px; resize: vertical; }
+.budget-rule-column .preview-delete-button { margin: 5px 0; }
+.budget-subsection { padding: 10px; margin: 10px 0; border: 1px solid #e0e5ec; border-radius: 7px; background: white; }
+.budget-time-list { display: grid; gap: 8px; margin-top: 8px; }
+.budget-time-row { display: flex; align-items: end; gap: 8px; padding: 7px; border: 1px solid #e3e8ef; border-radius: 6px; }
+.budget-time-row .budget-rule-field { flex: 1; margin: 0; }
+.budget-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.budget-rule-apply { margin-top: 12px; }
+@media (max-width: 1180px) { .budget-rule-top { grid-template-columns: 1fr; }.budget-rule-bottom { grid-template-columns: 1fr; } }

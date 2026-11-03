@@ -782,7 +782,8 @@ function appendHealthTool(container) {
 }
 
 function appendBudgetPreview(container) {
-  const { panel, fields, output } = toolPanel('預算規則預覽', '只計算規則是否命中，不會修改廣告預算。');
+  const { panel, fields, output } = toolPanel('預算規則預覽',
+    '使用下方樣本數據計算數值門檻；尚未計入時間窗、重複追加和日終動作，也不會修改廣告預算。');
   const inputs = {};
   const defs = [
     ['dailyBudget', '目前每日預算 TWD', 85], ['spend', '目前花費 TWD', 60],
@@ -804,6 +805,7 @@ function appendBudgetPreview(container) {
       : `目前不符合追加條件：${result.reason}。剩餘預算 TWD ${(result.gapTwd ?? 0).toFixed(2)}。`;
   }, '預覽規則');
   container.append(panel);
+  return { inputs, output, button: panel.querySelector('button.run-button') };
 }
 
 function appendCalculator(container) {
@@ -1688,6 +1690,211 @@ function appendTitleLayout(detail, feature) {
   legacyStatus(detail, feature);
 }
 
+function budgetRuleField(parent, className, labelText, { type = 'number', value = '', placeholder = '', min, step } = {}) {
+  const label = node('label', 'budget-rule-field', labelText);
+  const input = node(type === 'textarea' ? 'textarea' : 'input');
+  input.className = className;
+  if (type !== 'textarea') input.type = type;
+  input.value = value;
+  input.placeholder = placeholder;
+  if (min !== undefined) input.min = min;
+  if (step !== undefined) input.step = step;
+  label.append(input);
+  parent.append(label);
+  return input;
+}
+
+function budgetRuleCheck(parent, className, labelText, checked = false) {
+  const label = node('label', 'legacy-radio');
+  const input = node('input');
+  input.type = 'checkbox';
+  input.className = className;
+  input.checked = checked;
+  label.append(input, node('span', '', labelText));
+  parent.append(label);
+  return input;
+}
+
+function makeBudgetRule(index, onRemove) {
+  const row = node('article', 'budget-rule-row');
+  const head = node('div', 'budget-rule-head');
+  head.append(node('h3', '', `規則 ${index}`));
+  const remove = node('button', 'preview-delete-button', '移除規則');
+  remove.type = 'button';
+  remove.addEventListener('click', () => {
+    if (row.parentElement?.children.length > 1) {
+      row.remove();
+      onRemove();
+    }
+  });
+  head.append(remove);
+  row.append(head);
+  const top = node('div', 'budget-rule-top');
+  const product = node('section', 'budget-rule-column');
+  product.append(node('h4', '', '商品設定'));
+  const pick = node('button', 'preview-delete-button', '添加商品');
+  pick.type = 'button'; pick.disabled = true;
+  pick.title = '商品選擇器尚未接入';
+  product.append(pick);
+  budgetRuleField(product, 'rule-item-ids', '商品 ID（支援多 ID）', {
+    type: 'textarea', placeholder: '逗號、空格或換行均可',
+  });
+  const budget = node('section', 'budget-rule-column');
+  budget.append(node('h4', '', '預算設定'));
+  budgetRuleField(budget, 'rule-add-amount', '追加金額 (TWD)', { min: '1', placeholder: '例如 20' });
+  budgetRuleField(budget, 'rule-max-budget', '最高預算上限 (TWD)', { min: '40', placeholder: '例如 200' });
+  budgetRuleField(budget, 'rule-delay-min', '延遲執行（分鐘）', { min: '0', value: '2' });
+  budgetRuleField(budget, 'rule-check-interval', '查詢頻率（分鐘）', { min: '1', value: '2' });
+  budgetRuleField(budget, 'rule-cpc-limit', '單點花費上限 (TWD)', { min: '0', step: '0.01', placeholder: '留空不限制' });
+  budgetRuleField(budget, 'rule-min-roi', '最低投產比要求', { min: '0', step: '0.1', placeholder: '留空不限制' });
+  budgetRuleCheck(budget, 'rule-repeat', '重複加預算', true);
+  const reserve = node('section', 'budget-rule-column');
+  reserve.append(node('h4', '', '預算預留空間設定'));
+  budgetRuleField(reserve, 'rule-gap-range', '預留空間', { type: 'text', placeholder: '例如 50-200 或 50' });
+  budgetRuleField(reserve, 'rule-default-budget', '預設預算（23:55 還原）', { min: '40', placeholder: '例如 40' });
+  reserve.append(node('p', 'group-intro', '原版在 23:55 將預算還原為預設值。此排程尚未接入。'));
+  top.append(product, budget, reserve);
+  row.append(top);
+  const bottom = node('div', 'budget-rule-bottom');
+  const schedule = node('section', 'budget-rule-column');
+  schedule.append(node('h4', '', '定時動作'), node('strong', '', '23:55 動作'));
+  const pause = budgetRuleCheck(schedule, 'rule-pause-at-reset', '23:55 暫停廣告');
+  const bump = budgetRuleCheck(schedule, 'rule-bump-roi-at-reset', '23:55 提高 ROI 至');
+  const bumpValue = budgetRuleField(schedule, 'rule-roi-target', '目標 ROI', { min: '1', step: '0.1' });
+  bumpValue.parentElement.hidden = true;
+  const recovery = node('div', 'budget-subsection');
+  recovery.append(node('h4', '', '次日恢復設定'));
+  const resume = budgetRuleField(recovery, 'rule-resume-time', '恢復開投時間', { type: 'time', value: '00:30' });
+  const roiRestoreTime = budgetRuleField(recovery, 'rule-roi-restore-time', '恢復 ROI 時間', { type: 'time', value: '00:30' });
+  const roiRestore = budgetRuleField(recovery, 'rule-roi-restore', '恢復 ROI 至', {
+    min: '0', step: '0.1', placeholder: '0 表示系統 ROI；留空不恢復',
+  });
+  const updateRecovery = () => {
+    bumpValue.parentElement.hidden = !bump.checked;
+    recovery.hidden = !pause.checked && !bump.checked;
+    resume.parentElement.hidden = !pause.checked;
+    roiRestoreTime.parentElement.hidden = roiRestore.parentElement.hidden = !bump.checked;
+  };
+  pause.addEventListener('change', updateRecovery);
+  bump.addEventListener('change', updateRecovery);
+  schedule.append(recovery, node('hr', 'delete-ads-divider'),
+    node('h4', '', '不同時間段的 ROI 調整'));
+  const timedRoi = budgetRuleCheck(schedule, 'rule-enable-roi-time-points', '啟用時間段 ROI 調整');
+  const pointArea = node('div', 'budget-subsection');
+  const executeToday = legacyControl('已過時間點的執行方式', '', { kind: 'select', options: [
+    ['tomorrow', '次日執行'], ['today', '當天執行'],
+  ] });
+  executeToday.control.className = 'rule-roi-execute-today';
+  pointArea.append(executeToday.wrapper);
+  const points = node('div', 'budget-time-list');
+  const addPoint = node('button', 'preview-delete-button', '＋ 添加時間點');
+  addPoint.type = 'button';
+  addPoint.addEventListener('click', () => {
+    const item = node('div', 'budget-time-row');
+    budgetRuleField(item, 'rule-roi-time', '開始時間', { type: 'time', value: '02:00' });
+    budgetRuleField(item, 'rule-roi-value', '目標 ROI（0 為系統 ROI）', { min: '0', step: '0.1' });
+    const del = node('button', 'preview-delete-button', '移除');
+    del.type = 'button'; del.addEventListener('click', () => item.remove());
+    item.append(del); points.append(item);
+  });
+  pointArea.append(addPoint, points);
+  timedRoi.addEventListener('change', () => {
+    if (timedRoi.checked) bump.checked = false;
+    pointArea.hidden = !timedRoi.checked;
+    updateRecovery();
+  });
+  bump.addEventListener('change', () => {
+    if (bump.checked) timedRoi.checked = false;
+    pointArea.hidden = !timedRoi.checked;
+  });
+  schedule.append(pointArea);
+  const windows = node('section', 'budget-rule-column');
+  windows.append(node('h4', '', '加預算時間控制'));
+  const allDay = budgetRuleCheck(windows, 'rule-all-day', '不限時間（固定到 23:55 截止）', true);
+  const windowArea = node('div', 'budget-subsection');
+  const addWindow = node('button', 'preview-delete-button', '＋ 添加時間段');
+  addWindow.type = 'button';
+  const windowList = node('div', 'budget-time-list');
+  addWindow.addEventListener('click', () => {
+    const item = node('div', 'budget-time-row');
+    budgetRuleField(item, 'rule-window-start', '開始', { type: 'time', value: '09:00' });
+    budgetRuleField(item, 'rule-window-end', '結束', { type: 'time', value: '23:55' });
+    const del = node('button', 'preview-delete-button', '移除');
+    del.type = 'button'; del.addEventListener('click', () => item.remove());
+    item.append(del); windowList.append(item);
+  });
+  allDay.addEventListener('change', () => { windowArea.hidden = allDay.checked; });
+  windowArea.append(addWindow, windowList);
+  windows.append(windowArea, node('p', 'group-intro', '時間段最晚到 23:55；目前只保存畫面草稿，不會啟動排程。'));
+  bottom.append(schedule, windows);
+  row.append(bottom);
+  const preview = node('button', 'preview-delete-button budget-rule-apply', '用此規則預覽');
+  preview.type = 'button';
+  row.append(preview);
+  updateRecovery();
+  pointArea.hidden = true;
+  windowArea.hidden = true;
+  return row;
+}
+
+function appendBudgetLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout budget-rules-layout');
+  form.append(node('h3', '', '📈 自動加預算（按消耗水位線）'),
+    node('p', 'group-intro', '當「預算－消耗」落在水位區間內或低於下限，原版會依規則追加預算。'));
+  const states = node('div', 'legacy-radio-row');
+  states.append(legacyRadio('state-filter', '', 'ongoing', '只看進行中', true),
+    legacyRadio('state-filter', '', 'all', '全部', false, true));
+  form.append(states, node('p', 'group-intro', '運行中的規則在原版會鎖定編輯。'));
+  const list = node('div', 'budget-rule-list');
+  list.id = 'rule-list';
+  const renumber = () => {
+    [...list.children].forEach((row, index) => {
+      row.querySelector('.budget-rule-head h3').textContent = `規則 ${index + 1}`;
+    });
+  };
+  list.append(makeBudgetRule(1, renumber));
+  form.append(list);
+  const controls = node('div', 'budget-controls');
+  const add = node('button', 'run-button', '＋ 添加規則');
+  add.type = 'button'; add.id = 'btn-add-rule';
+  add.addEventListener('click', () => {
+    list.append(makeBudgetRule(list.children.length + 1, renumber));
+    renumber();
+  });
+  controls.append(add);
+  for (const [id, label] of [['btn-start-topup', '▶ 開啟輪詢'], ['btn-stop-topup', '⏹ 停止輪詢']]) {
+    const button = node('button', 'run-button', label);
+    button.id = id; button.type = 'button'; button.disabled = true;
+    button.title = '可靠排程與廣告寫入尚未完成沙盒驗證';
+    controls.append(button);
+  }
+  form.append(controls, node('p', 'query-note', '23:55 還原、輪詢及次日恢復尚未接入；下方可用樣本數據預覽規則的數值門檻。時間窗、重複追加和日終動作不包含在此預覽內。'));
+  detail.append(form);
+  legacyStatus(detail, feature);
+  const preview = appendBudgetPreview(detail);
+  list.addEventListener('click', event => {
+    if (!event.target.closest('.budget-rule-apply')) return;
+    const row = event.target.closest('.budget-rule-row');
+    const value = className => row.querySelector(`.${className}`).value.trim();
+    const gap = value('rule-gap-range');
+    const match = /^(\d+(?:\.\d+)?)(?:\s*-\s*(\d+(?:\.\d+)?))?$/.exec(gap);
+    if (!match || (match[2] && Number(match[2]) < Number(match[1])) || !value('rule-add-amount')) {
+      preview.output.className = 'output error';
+      preview.output.textContent = '請填寫有效的預留空間（例如 50 或 50-200）和追加金額。';
+      preview.output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      return;
+    }
+    const mapping = {
+      gap: match[2] || match[1], add: value('rule-add-amount'),
+      cap: value('rule-max-budget') || '200', cpc: value('rule-cpc-limit') || '0',
+      minRoi: value('rule-min-roi') || '0', delay: value('rule-delay-min') || '0',
+    };
+    for (const [key, inputValue] of Object.entries(mapping)) preview.inputs[key].value = inputValue;
+    preview.button.click();
+    preview.output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+}
+
 function renderFeature(feature) {
   activeFeature = feature;
   const detail = $('feature-detail');
@@ -1709,6 +1916,7 @@ function renderFeature(feature) {
     'ads-filter': appendFilterLayout,
     'ads-health': appendHealthLayout,
     'products-title': appendTitleLayout,
+    'budget-rules': appendBudgetLayout,
   }[feature.id];
   if (legacyLayout) {
     legacyLayout(detail, feature);
