@@ -3,6 +3,7 @@ import { calculateProfit, DEFAULT_CALCULATOR_SETTINGS } from './calculator.js';
 import { evaluateBudgetTopup } from './budget-rule.js';
 import { scanCampaignPages } from './campaign-scan.js';
 import { parseItemIds, selectDeletionCandidates } from './campaign-selection.js';
+import { matchesCampaignMetrics } from './ad-filter.js';
 
 const BASE = 'http://127.0.0.1:8787';
 const BUDGET_DRAFT_KEY = 'cfBudgetRulesDraftV1';
@@ -573,7 +574,7 @@ function appendPerformanceTool(container) {
 
 function appendFilterTool(container) {
   const { panel, fields, output } = toolPanel('沙盒廣告篩選與匯出',
-    '逐頁讀取廣告與指定日期的每日績效，最多 10 頁／1000 個活動；只篩選和匯出，不會更改廣告。所有條件同時符合才會顯示。');
+    '逐頁讀取廣告與指定日期的每日績效，最多 10 頁／1000 個活動；只篩選和匯出，不會更改廣告。可選任一或全部數據條件。');
   const offset = field(fields, '活動起始位置', 'filter-offset', { value: '0', min: '0', step: '1' });
   const limit = field(fields, '每頁活動上限', 'filter-limit', { value: '100', min: '1', step: '1' });
   const maxPages = field(fields, '最多讀取頁數（1–10）', 'filter-pages', { value: '10', min: '1', step: '1' });
@@ -588,11 +589,14 @@ function appendFilterTool(container) {
   const maxCpc = field(fields, '最高 CPC TWD（可留空）', 'filter-cpc', { value: '', min: '0', step: '0.01' });
   const minRoi = field(fields, '最低 ROAS（可留空）', 'filter-roi', { value: '', min: '0', step: '0.01' });
   const minSpend = field(fields, '最少花費 TWD（可留空）', 'filter-spend', { value: '', min: '0', step: '0.01' });
+  const matchMode = field(fields, '數據條件匹配方式', 'filter-match-mode', { options: [
+    ['any', '任一條件符合'], ['all', '全部條件符合'],
+  ] });
   const exportButton = node('button', 'run-button', '匯出完整掃描結果 CSV');
   exportButton.type = 'button';
   exportButton.disabled = true;
   let exportRows = null;
-  const inputs = [offset, limit, maxPages, start, end, status, itemId, minClicks, maxCpc, minRoi, minSpend];
+  const inputs = [offset, limit, maxPages, start, end, status, itemId, minClicks, maxCpc, minRoi, minSpend, matchMode];
   for (const input of inputs) {
     for (const eventName of ['input', 'change']) {
       input.addEventListener(eventName, () => { exportRows = null; exportButton.disabled = true; });
@@ -653,10 +657,8 @@ function appendFilterTool(container) {
           const roi = spend > 0 ? gmv / spend : null;
           if (status.value && info.campaign_status !== status.value) continue;
           if (productId && !productIds.includes(productId)) continue;
-          if (clicksAtLeast !== null && clicks < clicksAtLeast) continue;
-          if (cpcAtMost !== null && (cpc === null || cpc > cpcAtMost)) continue;
-          if (roiAtLeast !== null && (roi === null || roi < roiAtLeast)) continue;
-          if (spendAtLeast !== null && spend < spendAtLeast) continue;
+          if (!matchesCampaignMetrics({ clicks, cpc, roi, spend },
+            { clicksAtLeast, cpcAtMost, roiAtLeast, spendAtLeast }, matchMode.value)) continue;
           rows.push([id, info.ad_name, info.campaign_status, productIds.join('、'),
             info.campaign_budget, byId.get(id)?.auto_bidding_info?.roas_target,
             impressions, clicks, cpc === null ? null : cpc.toFixed(2), spend.toFixed(2),
