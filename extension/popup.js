@@ -1,7 +1,20 @@
 const BASE = 'http://127.0.0.1:8787';
+const READ_ONLY_SANDBOX_SHOP_ID = '228006723';
 const $ = id => document.getElementById(id);
 
+async function requireSandboxBackend() {
+  const response = await fetch(`${BASE}/health`);
+  if (!response.ok) throw new Error('本機沙盒後端未就緒。');
+  const health = await response.json();
+  if (health.environment !== 'sandbox' || String(health.shopId) !== READ_ONLY_SANDBOX_SHOP_ID) {
+    throw new Error('目前只允許連接臺灣沙盒測試店鋪。');
+  }
+  return health;
+}
+
 async function api(path, { method = 'GET', body } = {}) {
+  await requireSandboxBackend();
+  if (method !== 'GET') throw new Error('目前只讀核對，已停用店鋪寫入。');
   const { pairToken } = await chrome.storage.local.get('pairToken');
   if (!pairToken) throw new Error('請先儲存本機配對碼');
   const response = await fetch(`${BASE}${path}`, {
@@ -30,13 +43,12 @@ function showError(error, target = 'results') {
 async function checkHealth() {
   let result;
   try {
-    const response = await fetch(`${BASE}/health`);
-    if (!response.ok) throw new Error('本機後端未就緒');
-    result = await response.json();
-  } catch {
+    result = await requireSandboxBackend();
+  } catch (error) {
     document.querySelector('.state-section').classList.add('offline');
     $('status').className = 'error';
-    $('status').textContent = '本機後端未啟動；利潤計算仍可使用。';
+    $('status').textContent = error.message?.includes('只允許')
+      ? error.message : '本機後端未啟動；利潤計算仍可使用。';
     $('auth-status').textContent = '本機後端未連線，無法確認授權';
     return;
   }
@@ -77,6 +89,7 @@ $('save-pair').addEventListener('click', async () => {
   const pairToken = $('pair-token').value.trim();
   if (!pairToken) return showError(new Error('請輸入配對碼'));
   try {
+    await requireSandboxBackend();
     const response = await fetch(`${BASE}/api/items?status=NORMAL&pageSize=1`, {
       headers: { authorization: `Bearer ${pairToken}` },
     });

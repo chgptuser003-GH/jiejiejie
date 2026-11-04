@@ -9,6 +9,7 @@ import { selectAdCreationItems } from './ad-create-selection.js';
 import { classifyAllShopAds } from './all-shop-query.js';
 
 const BASE = 'http://127.0.0.1:8787';
+const READ_ONLY_SANDBOX_SHOP_ID = '228006723';
 const BUDGET_DRAFT_KEY = 'cfBudgetRulesDraftV1';
 const node = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -21,6 +22,13 @@ let activeModule = modules[0];
 let activeFeature = activeModule.features[0];
 
 async function api(path, { method = 'GET', body } = {}) {
+  const healthResponse = await fetch(`${BASE}/health`);
+  if (!healthResponse.ok) throw new Error('本機沙盒後端未就緒。');
+  const health = await healthResponse.json();
+  if (health.environment !== 'sandbox' || String(health.shopId) !== READ_ONLY_SANDBOX_SHOP_ID) {
+    throw new Error('目前只允許查詢臺灣沙盒測試店鋪。');
+  }
+  if (method !== 'GET') throw new Error('目前只讀核對原版功能，已停用店鋪建立、修改與刪除。');
   const { pairToken } = await chrome.storage.local.get('pairToken');
   if (!pairToken) throw new Error('請先在插件視窗儲存本機配對碼。');
   const response = await fetch(`${BASE}${path}`, {
@@ -279,7 +287,8 @@ function appendManualAdTool(container) {
         referenceId: crypto.randomUUID(),
       };
       output.textContent = `測試店鋪 ${prepared.shopId}\n商品 ID ${numericId}\n每日預算 TWD ${dailyBudget.toFixed(2)}\n開始日期 ${startDate.value}\n競價方式：平台自動（不設定目標 ROAS）\n尚未送出建立請求。`;
-      createButton.disabled = false;
+      createButton.disabled = true;
+      createButton.title = '只讀核對期間停用建立';
     } catch (error) {
       output.className = 'output error';
       output.textContent = error.message || String(error);
@@ -391,7 +400,8 @@ function appendBatchAutoAdTool(container) {
         [item.item_id, item.item_status, budget, dateInput.value]));
       output.prepend(node('p', 'query-summary',
         `沙盒店鋪 ${checked.shopId}；已完整核對 ${checked.scannedAds} 個既有廣告。${checked.items.length} 件待建立；尚未送出請求。`));
-      createButton.disabled = false;
+      createButton.disabled = true;
+      createButton.title = '只讀核對期間停用建立';
     } catch (error) {
       output.className = 'output error';
       output.textContent = error.message || String(error);
@@ -543,7 +553,8 @@ function appendManualEditTool(container) {
         referenceId: crypto.randomUUID(),
       };
       output.textContent = `測試店鋪 ${prepared.shopId}\n活動 ${id} · ${current.ad_name ?? ''}\n目前狀態 ${current.campaign_status}\n競價方式 ${current.bidding_method ?? '—'}\n目前預算 TWD ${current.campaign_budget}\n目前目標 ROAS ${campaign.auto_bidding_info?.roas_target ?? '—'}\n修改動作 ${action.selectedOptions[0].textContent}${['change_budget', 'change_roas_target'].includes(action.value) ? ` · 新值 ${numericValue}` : ''}\n尚未送出修改請求。`;
-      editButton.disabled = false;
+      editButton.disabled = true;
+      editButton.title = '只讀核對期間停用修改';
     } catch (error) {
       output.className = 'output error';
       output.textContent = error.message || String(error);
@@ -669,7 +680,8 @@ function appendBatchValueTool(container, kind) {
       table(output, ['活動 ID', '名稱', `目前${label}`, `新${label}`, '結果'], rows);
       output.prepend(summary);
       prepared = { shopId: String(health.shopId), targetValue, requests };
-      executeButton.disabled = requests.length === 0;
+      executeButton.disabled = true;
+      executeButton.title = '只讀核對期間停用修改';
     } catch (error) {
       output.className = 'output error';
       output.textContent = error.message || String(error);

@@ -1,4 +1,5 @@
 const BASE = 'http://127.0.0.1:8787';
+const READ_ONLY_SANDBOX_SHOP_ID = '228006723';
 const inflight = new Set();
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
@@ -16,7 +17,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   await chrome.storage.local.remove('pendingRedirectOrigin');
   try {
     if (callbackError) throw new Error('Shopee 授權未完成。');
-    if (!shopId) throw new Error('Shopee 未返回測試 Shop ID。');
+    if (String(shopId) !== READ_ONLY_SANDBOX_SHOP_ID) throw new Error('目前只允許臺灣沙盒測試店鋪授權。');
+    const healthResponse = await fetch(`${BASE}/health`);
+    if (!healthResponse.ok) throw new Error('本機沙盒後端未就緒。');
+    const health = await healthResponse.json();
+    if (health.environment !== 'sandbox' || String(health.shopId) !== READ_ONLY_SANDBOX_SHOP_ID) {
+      throw new Error('目前只允許連接臺灣沙盒測試店鋪。');
+    }
     const response = await fetch(`${BASE}/oauth/finish`, {
       method: 'POST',
       headers: { authorization: `Bearer ${pairToken}`, 'content-type': 'application/json' },
