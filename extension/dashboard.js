@@ -2,7 +2,7 @@ import { modules, statuses } from './feature-catalog.js';
 import { calculateProfit, DEFAULT_CALCULATOR_SETTINGS } from './calculator.js';
 import { evaluateBudgetTopup } from './budget-rule.js';
 import { scanCampaignPages } from './campaign-scan.js';
-import { parseItemIds, selectDeletionCandidates } from './campaign-selection.js';
+import { parseItemIds, selectBudgetCampaigns, selectDeletionCandidates } from './campaign-selection.js';
 import { dateRangeFromPreset, matchesCampaignMetrics, matchesMetricConditions, summarizeDailyMetrics } from './ad-filter.js';
 import { classifyCampaignHealth } from './ad-health.js';
 
@@ -411,6 +411,8 @@ function appendBatchBudgetTool(container) {
   const stopButton = node('button', 'run-button', '完成目前活動後停止');
   const logButton = node('button', 'run-button', '查看上次執行記錄');
   for (const button of [previewButton, executeButton, stopButton, logButton]) button.type = 'button';
+  previewButton.id = 'batch-budget-preview';
+  executeButton.id = 'batch-budget-execute';
   executeButton.disabled = true;
   stopButton.disabled = true;
   const actions = node('div', 'tool-actions');
@@ -418,10 +420,16 @@ function appendBatchBudgetTool(container) {
   panel.append(actions, output);
   let prepared = null;
   let stopRequested = false;
+  let previewVersion = 0;
   for (const input of [idsInput, budgetInput]) {
-    input.addEventListener('input', () => { prepared = null; executeButton.disabled = true; });
+    input.addEventListener('input', () => {
+      previewVersion++;
+      prepared = null;
+      executeButton.disabled = true;
+    });
   }
   previewButton.addEventListener('click', async () => {
+    const version = ++previewVersion;
     prepared = null;
     executeButton.disabled = true;
     previewButton.disabled = true;
@@ -444,6 +452,7 @@ function appendBatchBudgetTool(container) {
       if (String(settings.shop_id) !== String(health.shopId)) {
         throw new Error('活動設定的店鋪與目前沙盒店鋪不一致。');
       }
+      if (version !== previewVersion) throw new Error('預覽期間輸入已改變，請重新預覽。');
       const byId = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
       const rows = [];
       const requests = [];
@@ -467,6 +476,7 @@ function appendBatchBudgetTool(container) {
           referenceId: crypto.randomUUID(),
         });
       }
+      if (version !== previewVersion) throw new Error('預覽期間輸入已改變，請重新預覽。');
       const summary = node('p', 'query-summary',
         `沙盒店鋪 ${health.shopId}；${ids.length} 個活動，其中 ${requests.length} 個預算會變更。尚未送出修改請求。`);
       table(output, ['活動 ID', '名稱', '目前預算 TWD', '新預算 TWD', '結果'], rows);
@@ -1422,8 +1432,92 @@ function appendRoiBudgetLayout(detail, feature) {
   columns.append(appendRoiBudgetColumn('批量修改 ROI', 'roi'),
     appendRoiBudgetColumn('批量修改預算', 'budget'));
   detail.append(columns);
+  const status = node('div', 'output', '上方商品 ID 可先對照沙盒進行中的手動選品廣告，再送到下方安全預覽。');
+  detail.append(status);
   legacyStatus(detail, feature);
   appendManualEditTools(detail);
+  const budgetButtons = [columns.querySelector('#btn-edit-budget-by-ids'),
+    columns.querySelector('#btn-edit-budget-all')];
+  let mappingBusy = false;
+  let selectionVersion = 0;
+  for (const id of ['edit-budget-target', 'edit-budget-only-ids', 'edit-budget-exclude-ids']) {
+    $(id).addEventListener('input', () => {
+      selectionVersion++;
+      const lowerIds = $('batch-budget-ids');
+      lowerIds.value = '';
+      lowerIds.dispatchEvent(new Event('input', { bubbles: true }));
+      status.className = 'output';
+      status.textContent = '上方條件已改變；請重新產生預算修改預覽。';
+    });
+  }
+  for (const [mode, buttonId] of [
+    ['include', 'btn-edit-budget-by-ids'], ['exclude', 'btn-edit-budget-all'],
+  ]) {
+    const button = columns.querySelector(`#${buttonId}`);
+    button.disabled = false;
+    button.textContent = mode === 'include' ? '預覽按 ID 修改' : '預覽排除後修改';
+    button.title = '只讀對照商品與活動，並開啟下方預算預覽；不會直接修改廣告';
+    button.addEventListener('click', async () => {
+      if (mappingBusy) return;
+      mappingBusy = true;
+      budgetButtons.forEach(item => { item.disabled = true; });
+      const version = selectionVersion;
+      status.className = 'output';
+      status.textContent = '正在對照商品 ID 與進行中廣告…';
+      try {
+        const targetInput = $('edit-budget-target');
+        const targetBudget = Number(targetInput.value);
+        if (targetInput.value.trim() === '' || !Number.isFinite(targetBudget) || targetBudget <= 0) {
+          throw new Error('目標每日預算必須大於 0。');
+        }
+        const itemIds = parseItemIds($(`edit-budget-${mode === 'include' ? 'only' : 'exclude'}-ids`).value,
+          { required: mode === 'include' });
+        const lowerPreview = $('batch-budget-preview');
+        if (lowerPreview.disabled) throw new Error('下方批量任務正在執行，請等待完成。');
+        const settings = [];
+        const scan = await scanCampaignPages({
+          maxPages: 10, pageSize: 100,
+          fetchPage: ({ offset, limit }) => api(`/api/ads?type=manual&limit=${limit}&offset=${offset}`),
+          onPage: async (campaigns, { page }) => {
+            status.textContent = `正在核對第 ${page} 頁；已取得 ${settings.length} 個活動設定…`;
+            if (!campaigns.length) return;
+            const ids = campaigns.map(item => String(item.campaign_id));
+            const result = await api(`/api/ads/settings?ids=${encodeURIComponent(ids.join(','))}`);
+            const byId = new Map((result.campaign_list || []).map(item => [String(item.campaign_id), item]));
+            if (ids.some(id => !byId.get(id)?.common_info)) {
+              throw new Error('部分廣告設定未回傳，不能按商品 ID 建立可靠的修改預覽。');
+            }
+            settings.push(...ids.map(id => byId.get(id)));
+          },
+        });
+        const selected = selectBudgetCampaigns(settings, itemIds, mode, scan.complete);
+        if (version !== selectionVersion) throw new Error('查詢期間上方條件已改變，請重新預覽。');
+        if (selected.missingIds.length) {
+          throw new Error(`找不到這些商品對應的進行中手動選品廣告：${selected.missingIds.join('、')}。`);
+        }
+        if (!selected.candidates.length) throw new Error('沒有符合條件的進行中手動選品廣告。');
+        if (selected.candidates.length > 10) {
+          throw new Error(`符合 ${selected.candidates.length} 個活動；目前下方安全批量工具一次最多處理 10 個，請縮小商品範圍。`);
+        }
+        const lowerIds = $('batch-budget-ids');
+        const lowerBudget = $('batch-budget-value');
+        lowerIds.value = selected.candidates.map(item => item.campaignId).join(' ');
+        lowerIds.dispatchEvent(new Event('input', { bubbles: true }));
+        lowerBudget.value = String(targetBudget);
+        lowerBudget.dispatchEvent(new Event('input', { bubbles: true }));
+        if (lowerPreview.disabled) throw new Error('下方批量任務正在執行，請等待完成。');
+        lowerPreview.click();
+        status.textContent = `已完整核對 ${scan.scanned} 個手動廣告活動，選出 ${selected.candidates.length} 個；下方正在讀取目前預算並產生預覽。尚未送出修改。`;
+        lowerPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (error) {
+        status.className = 'output error';
+        status.textContent = error.message || String(error);
+      } finally {
+        mappingBusy = false;
+        budgetButtons.forEach(item => { item.disabled = false; });
+      }
+    });
+  }
 }
 
 function appendBoostLayout(detail, feature) {

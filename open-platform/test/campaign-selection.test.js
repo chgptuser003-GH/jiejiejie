@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseItemIds, selectDeletionCandidates } from '../../extension/campaign-selection.js';
+import { parseItemIds, selectBudgetCampaigns, selectDeletionCandidates } from '../../extension/campaign-selection.js';
 
 test('item ID parser accepts separators and rejects unsafe values', () => {
   assert.deepEqual([...parseItemIds('12, 13\n12，14')], ['12', '13', '14']);
@@ -21,4 +21,21 @@ test('deletion preview protects excluded items and unknown associations', () => 
   const included = selectDeletionCandidates(campaigns, parseItemIds('12', { required: true }), 'include');
   assert.deepEqual(included.candidates.map(item => item.campaignId), [1]);
   assert.equal(included.unknown, 1);
+});
+
+test('budget selection requires a complete scan and known product mapping', () => {
+  const campaigns = [
+    { campaign_id: 1, common_info: { ad_type: 'manual', campaign_status: 'ongoing', item_id_list: [12, 13] } },
+    { campaign_id: 2, common_info: { ad_type: 'manual', campaign_status: 'ongoing', item_id_list: [14] } },
+    { campaign_id: 3, common_info: { ad_type: 'manual', campaign_status: 'paused', item_id_list: [15] } },
+  ];
+  assert.deepEqual(selectBudgetCampaigns(campaigns, parseItemIds('12'), 'include', true)
+    .candidates.map(item => item.campaignId), ['1']);
+  assert.deepEqual(selectBudgetCampaigns(campaigns, parseItemIds('12'), 'exclude', true)
+    .candidates.map(item => item.campaignId), ['2']);
+  assert.deepEqual(selectBudgetCampaigns(campaigns, parseItemIds('99'), 'include', true).missingIds, ['99']);
+  assert.throws(() => selectBudgetCampaigns(campaigns, parseItemIds('12'), 'include', false), /尚未掃描完整/);
+  assert.throws(() => selectBudgetCampaigns([...campaigns, { campaign_id: 4, common_info: {
+    ad_type: 'manual', campaign_status: 'ongoing', item_id_list: [] } }],
+  parseItemIds('12'), 'include', true), /缺少商品關聯/);
 });
