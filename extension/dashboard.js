@@ -1,4 +1,4 @@
-import { modules, statuses } from './feature-catalog.js';
+import { modules } from './feature-catalog.js';
 import { calculateProfit, DEFAULT_CALCULATOR_SETTINGS } from './calculator.js';
 import { evaluateBudgetTopup } from './budget-rule.js';
 import { scanCampaignPages } from './campaign-scan.js';
@@ -68,6 +68,24 @@ function toolPanel(title, description) {
   panel.append(fields);
   const output = node('div', 'output', '輸入條件後按執行。');
   return { panel, fields, output };
+}
+
+function operationDialog(container, title) {
+  const dialog = node('dialog', 'operation-dialog');
+  const heading = node('div', 'operation-dialog-heading');
+  const close = node('button', 'preview-delete-button', '關閉');
+  close.type = 'button';
+  const isRunning = () => Boolean(body.querySelector('[data-task-running="true"]'));
+  close.addEventListener('click', () => {
+    if (isRunning()) return;
+    dialog.close();
+  });
+  heading.append(node('h3', '', title), close);
+  const body = node('div', 'operation-dialog-body');
+  dialog.append(heading, body);
+  dialog.addEventListener('cancel', event => { if (isRunning()) event.preventDefault(); });
+  container.append(dialog);
+  return { dialog, body };
 }
 
 function runButton(panel, output, action, label = '查詢') {
@@ -398,6 +416,7 @@ function appendBatchAutoAdTool(container) {
     if (!window.confirm(`確認在沙盒店鋪 ${prepared.shopId} 為 ${prepared.requests.length} 件商品逐件建立每日預算 TWD ${prepared.budget} 的測試廣告？`)) return;
     const batch = prepared;
     prepared = null;
+    panel.dataset.taskRunning = 'true';
     createButton.disabled = previewButton.disabled = true;
     stopButton.disabled = false;
     stopRequested = false;
@@ -454,6 +473,7 @@ function appendBatchAutoAdTool(container) {
       output.className = 'output error';
       output.textContent = `批量任務未繼續：${run.error}\n請核對記錄。`;
     } finally {
+      delete panel.dataset.taskRunning;
       stopButton.disabled = true;
       previewButton.disabled = false;
       stopRequested = false;
@@ -674,6 +694,7 @@ function appendBatchValueTool(container, kind) {
     if (!window.confirm(`確認在沙盒店鋪 ${prepared.shopId} 修改 ${prepared.requests.length} 個廣告活動的${label}為 ${prepared.targetValue}？`)) return;
     const batch = prepared;
     prepared = null;
+    panel.dataset.taskRunning = 'true';
     executeButton.disabled = true;
     previewButton.disabled = true;
     stopButton.disabled = false;
@@ -734,6 +755,7 @@ function appendBatchValueTool(container, kind) {
       output.className = 'output error';
       output.textContent = `批量任務已停止：${error.message || String(error)}\n請先核對活動設定與上次執行記錄，避免重複送出。`;
     } finally {
+      delete panel.dataset.taskRunning;
       stopButton.disabled = true;
       previewButton.disabled = false;
       stopRequested = false;
@@ -1305,12 +1327,11 @@ function appendAllShopLayout(detail, feature) {
   query.type = 'button';
   query.id = 'query-no-ads-products';
   helper.append(node('span', 'helper-tool-icon', '⌕'), helperCopy, query);
-  const note = node('div', 'parameter-section all-shop-status');
-  note.append(node('strong', '', '目前 API 對接進度'), node('p', '', feature.details));
-  detail.append(setup, execution, helper, note);
+  detail.append(setup, execution, helper);
   const candidatePanel = appendAllAdCandidates(detail);
-  appendCampaignTool(detail);
+  candidatePanel.hidden = true;
   query.addEventListener('click', () => {
+    candidatePanel.hidden = false;
     candidatePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
     candidatePanel.querySelector('.run-button')?.click();
   });
@@ -1334,9 +1355,7 @@ function appendAdGroupsLayout(detail, feature) {
   button.title = '官方店鋪 GMV Max 尚未證實等同原版 30 件商品群組';
   action.append(text, button);
   form.append(action);
-  const note = node('div', 'parameter-section all-shop-status');
-  note.append(node('strong', '', 'API 對接進度'), node('p', '', feature.details));
-  detail.append(form, note);
+  detail.append(form);
 }
 
 function appendCpcMonitorLayout(detail, feature) {
@@ -1388,10 +1407,7 @@ function appendCpcMonitorLayout(detail, feature) {
     actions.append(button);
   }
   form.append(actions);
-  const note = node('div', 'parameter-section all-shop-status');
-  note.append(node('strong', '', 'API 對接進度'), node('p', '', feature.details));
-  detail.append(form, note);
-  appendPerformanceTool(detail);
+  detail.append(form);
 }
 
 function appendDeleteAdsLayout(detail, feature) {
@@ -1419,38 +1435,24 @@ function appendDeleteAdsLayout(detail, feature) {
     info.append(node('strong', '', title), node('p', '', description));
     const button = node('button', 'task-primary-btn', buttonText);
     button.type = 'button';
-    button.disabled = true;
     button.id = id === 'delete-exclude-ids' ? 'btn-delete-all' : 'btn-delete-by-ids';
-    button.title = '批量刪除尚未完成預覽、逐筆確認與沙盒驗證';
-    const preview = node('button', 'preview-delete-button', '只讀預覽');
-    preview.type = 'button';
-    const exportButton = node('button', 'preview-delete-button', '下載核對表 CSV');
-    exportButton.type = 'button';
-    exportButton.disabled = true;
+    button.title = '先核對刪除範圍；目前不會送出刪除請求';
     const actions = node('div', 'legacy-action-buttons');
-    actions.append(preview, exportButton, button);
+    actions.append(button);
     action.append(info, actions);
+    const { dialog, body } = operationDialog(detail, '核對刪除範圍');
     const result = node('div', 'output');
     result.hidden = true;
     const headers = ['活動 ID', '名稱', '狀態', '廣告類型', '商品 ID', 'API 對照', '掃描範圍'];
-    let exportRows = null;
     let previewVersion = 0;
     textarea.addEventListener('input', () => {
       previewVersion++;
-      exportRows = null;
-      exportButton.disabled = true;
       result.hidden = true;
     });
-    exportButton.addEventListener('click', () => {
-      if (!exportRows) return;
-      downloadCsv(headers, exportRows,
-        `shopee-sandbox-ad-deletion-preview-${id === 'delete-exclude-ids' ? 'exclude' : 'include'}-${todayTaipei()}.csv`);
-    });
-    preview.addEventListener('click', async () => {
+    button.addEventListener('click', async () => {
       const version = ++previewVersion;
-      preview.disabled = true;
-      exportRows = null;
-      exportButton.disabled = true;
+      dialog.showModal();
+      button.disabled = true;
       result.hidden = false;
       result.className = 'output';
       result.textContent = '正在讀取活動…';
@@ -1485,19 +1487,16 @@ function appendDeleteAdsLayout(detail, feature) {
           `已排除：${item.reason}`, scope]));
         table(result, headers, rows);
         result.prepend(node('p', 'query-summary', `只讀預覽：已掃描 ${scan.scanned} 個活動；符合條件 ${selected.length} 個（手動選品 ${selected.filter(item => item.adType === 'manual').length} 個）；關聯或類型不明 ${unknownCampaigns.length} 個已排除。${scan.complete ? '活動清單已讀完。' : `後面仍有資料，從位置 ${scan.nextOffset} 繼續；此結果不完整。`}刪除請求尚未接通。`));
-        exportRows = rows;
-        exportButton.disabled = false;
       } catch (error) {
         result.className = 'output error';
         result.textContent = error.message || String(error);
-      } finally { preview.disabled = false; }
+      } finally { button.disabled = false; }
     });
-    form.append(action, result);
+    body.append(result);
+    form.append(action);
     if (id === 'delete-exclude-ids') form.append(node('hr', 'delete-ads-divider'));
   }
-  const note = node('div', 'parameter-section all-shop-status');
-  note.append(node('strong', '', 'API 對接進度'), node('p', '', feature.details));
-  detail.append(form, note);
+  detail.append(form);
 }
 
 function legacyControl(labelText, id, { kind = 'text', value = '', placeholder = '', min, step, options, help = '' } = {}) {
@@ -1539,12 +1538,6 @@ function legacyAction(title, description, buttonText, id, tone = '') {
   return action;
 }
 
-function legacyStatus(detail, feature) {
-  const note = node('div', 'parameter-section all-shop-status');
-  note.append(node('strong', '', 'API 對接進度'), node('p', '', feature.details));
-  detail.append(note);
-}
-
 function appendProductBulkLayout(detail, feature) {
   const form = node('section', 'workflow-card legacy-layout');
   form.append(legacyControl('指定商品 ID（可選，多 ID）', 'product-ids', {
@@ -1576,8 +1569,6 @@ function appendProductBulkLayout(detail, feature) {
   form.append(unlist, relist,
     legacyAction('⚡ 執行批量操作', '依選擇的類型批量處理商品。', '執行操作', 'btn-execute-product-operation'));
   detail.append(form);
-  legacyStatus(detail, feature);
-  appendProductTool(detail);
 }
 
 function appendSpecificAdsLayout(detail, feature) {
@@ -1607,11 +1598,10 @@ function appendSpecificAdsLayout(detail, feature) {
   form.append(node('p', 'group-intro', '目前接入的是已實測的手動選品、平台自動競價 API；與原版「系統 ROI」是否等價仍待核對。'));
   form.append(legacyAction('🤖 開啟系統 ROI 廣告', '為指定商品建立系統自動最佳化廣告。', '開啟廣告', 'btn-open-auto-roi', 'secondary'));
   detail.append(form);
-  legacyStatus(detail, feature);
-  appendManualAdTool(detail);
-  appendBatchAutoAdTool(detail);
-  const status = node('div', 'output', '上方輸入商品 ID 後，可先核對在架商品及既有廣告，再送往下方批量安全預覽。');
-  form.append(status);
+  const { dialog, body } = operationDialog(detail, '核對指定商品廣告');
+  const status = node('div', 'output', '先核對在架商品及既有廣告，再確認建立。');
+  body.append(status);
+  appendBatchAutoAdTool(body);
   const upperButton = form.querySelector('#btn-open-auto-roi');
   const lowerIds = $('batch-auto-ad-ids');
   const lowerBudget = $('batch-auto-ad-budget');
@@ -1625,9 +1615,9 @@ function appendSpecificAdsLayout(detail, feature) {
     });
   }
   upperButton.disabled = false;
-  upperButton.textContent = '預覽平台自動競價廣告';
-  upperButton.title = '只讀核對後帶入下方安全預覽；不會直接建立廣告';
+  upperButton.title = '先核對商品與既有廣告，確認後才在沙盒建立';
   upperButton.addEventListener('click', () => {
+    dialog.showModal();
     try {
       if (lowerPreview.disabled) throw new Error('下方批量任務正在執行，請等待完成。');
       const ids = parseItemIds($('auto-ids').value, { required: true });
@@ -1643,8 +1633,7 @@ function appendSpecificAdsLayout(detail, feature) {
       lowerBudget.dispatchEvent(new Event('input', { bubbles: true }));
       lowerPreview.click();
       status.className = 'output';
-      status.textContent = '下方正在核對商品及既有廣告；尚未送出建立請求。';
-      lowerPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      status.textContent = '正在核對商品及既有廣告；尚未送出建立請求。';
     } catch (error) {
       status.className = 'output error';
       status.textContent = error.message || String(error);
@@ -1696,10 +1685,11 @@ function appendRoiBudgetLayout(detail, feature) {
   columns.append(appendRoiBudgetColumn('批量修改 ROI', 'roi'),
     appendRoiBudgetColumn('批量修改預算', 'budget'));
   detail.append(columns);
-  const status = node('div', 'output', '上方商品 ID 可先對照沙盒進行中的手動選品廣告，再送到下方安全預覽。');
-  detail.append(status);
-  legacyStatus(detail, feature);
-  appendManualEditTools(detail);
+  const { dialog, body } = operationDialog(detail, '核對批量修改');
+  const status = node('div', 'output', '先核對商品 ID 與進行中的廣告，再確認修改。');
+  body.append(status);
+  appendBatchValueTool(body, 'budget');
+  appendBatchValueTool(body, 'roas');
   const buttons = ['roi', 'budget'].flatMap(kind => ['by-ids', 'all']
     .map(mode => columns.querySelector(`#btn-edit-${kind}-${mode}`)));
   let mappingBusy = false;
@@ -1725,10 +1715,10 @@ function appendRoiBudgetLayout(detail, feature) {
   ]) {
     const button = columns.querySelector(`#${buttonId}`);
     button.disabled = false;
-    button.textContent = mode === 'include' ? '預覽按 ID 修改' : '預覽排除後修改';
-    button.title = '只讀對照商品與活動，並開啟下方安全預覽；不會直接修改廣告';
+    button.title = '先核對商品與活動，明確確認後才在沙盒修改';
     button.addEventListener('click', async () => {
       if (mappingBusy) return;
+      dialog.showModal();
       mappingBusy = true;
       buttons.forEach(item => { item.disabled = true; });
       const version = selectionVersion[kind];
@@ -1785,7 +1775,6 @@ function appendRoiBudgetLayout(detail, feature) {
         if (lowerPreview.disabled) throw new Error('下方批量任務正在執行，請等待完成。');
         lowerPreview.click();
         status.textContent = `已完整核對 ${scan.scanned} 個手動廣告活動，選出 ${selected.candidates.length} 個；下方正在讀取目前${kind === 'roas' ? '目標 ROAS' : '預算'}並產生預覽。尚未送出修改。`;
-        lowerPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } catch (error) {
         status.className = 'output error';
         status.textContent = error.message || String(error);
@@ -1813,7 +1802,6 @@ function appendBoostLayout(detail, feature) {
     legacyAction('🚀 批量開啟加速推廣', '為指定商品開啟加速推廣。', '開啟加速', 'btn-enable-rapid-boost'),
     legacyAction('🛑 批量關閉加速推廣', '為指定商品關閉加速推廣。', '關閉加速', 'btn-disable-rapid-boost', 'secondary'));
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function legacyRadio(name, id, value, labelText, checked = false, disabled = false) {
@@ -1872,7 +1860,6 @@ function appendReopenLayout(detail, feature) {
   form.append(node('hr', 'delete-ads-divider'));
   appendReopenSection(form, 'auto');
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function appendFilterMetric(form, title, prefix, operators, { range = false } = {}) {
@@ -2098,8 +2085,6 @@ function appendFilterLayout(detail, feature) {
   idsButton.addEventListener('click', () => {
     if (matchedIds) downloadCsv(['商品 ID'], matchedIds.map(id => [id]), `cf-shopee-filter-items-${todayTaipei()}.csv`);
   });
-  legacyStatus(detail, feature);
-  appendFilterTool(detail);
 }
 
 function appendHealthLayout(detail, feature) {
@@ -2136,8 +2121,6 @@ function appendHealthLayout(detail, feature) {
       button.disabled = false;
     }
   });
-  legacyStatus(detail, feature);
-  appendHealthTool(detail);
 }
 
 function appendTitleLayout(detail, feature) {
@@ -2227,7 +2210,6 @@ function appendTitleLayout(detail, feature) {
   });
   form.append(initial, selected);
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function budgetRuleField(parent, className, labelText, { type = 'number', value = '', placeholder = '', min, step } = {}) {
@@ -2721,7 +2703,6 @@ function appendBudgetLayout(detail, feature) {
     restoring = false;
     draftStatus.textContent = `規則草稿讀取失敗：${error.message || error}`;
   });
-  legacyStatus(detail, feature);
   const preview = appendBudgetPreview(detail);
   list.addEventListener('click', event => {
     if (!event.target.closest('.budget-rule-apply')) return;
@@ -2877,11 +2858,9 @@ function appendShippingDaysLayout(detail, feature) {
   });
   form.append(preview, output);
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function shippingStatusRow(detail, feature) {
-  legacyStatus(detail, feature);
 }
 
 function appendShippingChannelsLayout(detail, feature) {
@@ -3160,7 +3139,6 @@ function appendMarketingBundleLayout(detail, feature) {
   form.append(start);
   appendMarketingScopePreview(form, mode, ids);
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function appendMarketingDiscountLayout(detail, feature) {
@@ -3190,7 +3168,6 @@ function appendMarketingDiscountLayout(detail, feature) {
   form.append(start);
   appendMarketingScopePreview(form, mode, ids);
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function appendMarketingGiftLayout(detail, feature) {
@@ -3252,7 +3229,6 @@ function appendMarketingGiftLayout(detail, feature) {
   });
   form.append(check, output);
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function appendFlashLayout(detail, feature) {
@@ -3275,7 +3251,6 @@ function appendFlashLayout(detail, feature) {
     node('p', 'query-note', '續期需要讀取活動、商品、價格與庫存，在到期時可靠地建立下一期；官方端點及排程尚未通過沙盒驗證。'),
     node('p', 'query-note', '原版另會在賣家中心限時特賣列表加入刪除操作；此功能尚未重建。'));
   detail.append(form);
-  legacyStatus(detail, feature);
 }
 
 function renderFeature(feature) {
@@ -3284,8 +3259,6 @@ function renderFeature(feature) {
   detail.replaceChildren();
   $('module-heading').textContent = feature.name;
   $('module-summary').textContent = feature.summary;
-  const badge = node('span', `status ${statuses[feature.status].className}`, statuses[feature.status].label);
-  detail.append(badge);
   const legacyLayout = {
     'ads-all': appendAllShopLayout,
     'ads-groups': appendAdGroupsLayout,

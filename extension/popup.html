@@ -26,25 +26,13 @@
       <div class="state-section"><span>◉ 當前狀態：</span><strong id="status" role="status">檢查本機後端中…</strong></div>
       <div class="expiry-section"><span>◷ 店鋪授權：</span><strong id="auth-status">尚未完成測試店鋪授權</strong></div>
       <details class="connection-tools">
-        <summary>連線設定與測試工具</summary>
+        <summary>店鋪連線設定</summary>
         <div class="tools-body">
-          <p class="muted">店鋪操作需先連接本機後端；未完成項目只顯示開發狀態。</p>
+          <p class="muted">店鋪操作需先連接本機後端。</p>
           <label for="pair-token">本機配對碼</label>
           <input id="pair-token" type="password" autocomplete="off" placeholder="貼上後端顯示的配對碼">
           <div class="actions"><button id="save-pair">儲存配對碼</button><button id="authorize" class="secondary">授權測試店鋪</button></div>
-          <div class="actions"><button id="load-items" class="secondary">查看在架商品</button><button id="load-ads" class="secondary">查看廣告活動</button></div>
-          <div id="results" class="results" aria-live="polite">授權後可讀取測試店鋪資料。</div>
-          <details class="inline-calculator">
-            <summary>快速利潤計算</summary>
-            <div class="grid">
-              <label>售價 TWD<input id="sellPrice" type="number" min="0" step="0.01" value="460"></label>
-              <label>採購價 CNY<input id="purchasePrice" type="number" min="0" step="0.01" value="40"></label>
-              <label>重量 kg<input id="weight" type="number" min="0" step="0.01" value="0.5"></label>
-            </div>
-            <details><summary>費率、匯率與其他成本</summary><div class="grid" id="calculator-settings"></div></details>
-            <button id="calculate">計算</button>
-            <div id="calculator-result" class="results" aria-live="polite"></div>
-          </details>
+          <div id="results" class="results" aria-live="polite"></div>
         </div>
       </details>
     </main>

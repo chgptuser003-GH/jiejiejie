@@ -1,17 +1,5 @@
-import { calculateProfit, DEFAULT_CALCULATOR_SETTINGS } from './calculator.js';
-
 const BASE = 'http://127.0.0.1:8787';
 const $ = id => document.getElementById(id);
-const money = value => Number(value).toFixed(2);
-const settingsLabels = {
-  platformFee: '平台費 %', serviceFee: '服務費 %', twToCnyRate: 'TWD／CNY 匯率',
-  cnyToTwRate: 'CNY／TWD 匯率', labelFee: '貼標費 CNY', shippingFee: '每 kg 運費 CNY',
-  deliveryFee: '配送費 TWD', domesticShipping: '境內運費 CNY',
-  freeShipping: '免運補貼 TWD', otherFee: '其他費 CNY',
-};
-const calculatorKeys = ['sellPrice', 'purchasePrice', 'weight', ...Object.keys(settingsLabels)];
-const calculatorValues = () => Object.fromEntries(calculatorKeys.map(key => [key, Number($(key).value)]));
-const saveCalculatorSettings = () => chrome.storage.local.set({ calculatorSettings: calculatorValues() });
 
 async function api(path, { method = 'GET', body } = {}) {
   const { pairToken } = await chrome.storage.local.get('pairToken');
@@ -80,31 +68,8 @@ async function checkHealth() {
 }
 
 async function initialize() {
-  const stored = await chrome.storage.local.get(['pairToken', 'calculatorSettings']);
+  const stored = await chrome.storage.local.get('pairToken');
   $('pair-token').value = stored.pairToken || '';
-  for (const key of ['sellPrice', 'purchasePrice', 'weight']) {
-    const saved = stored.calculatorSettings?.[key];
-    if (typeof saved === 'number' && Number.isFinite(saved) && saved >= 0) $(key).value = String(saved);
-  }
-  for (const [key, label] of Object.entries(settingsLabels)) {
-    const wrapper = document.createElement('label');
-    wrapper.textContent = label;
-    const input = document.createElement('input');
-    input.id = key;
-    input.type = 'number';
-    input.min = '0';
-    input.step = '0.01';
-    const saved = stored.calculatorSettings?.[key];
-    input.value = typeof saved === 'number' && Number.isFinite(saved) && saved >= 0
-      ? String(saved) : String(DEFAULT_CALCULATOR_SETTINGS[key]);
-    wrapper.append(input);
-    $('calculator-settings').append(wrapper);
-  }
-  for (const key of calculatorKeys) {
-    $(key).addEventListener('change', () => {
-      void saveCalculatorSettings().catch(error => showError(error, 'calculator-result'));
-    });
-  }
   await checkHealth();
 }
 
@@ -144,35 +109,6 @@ $('authorize').addEventListener('click', async () => {
     await chrome.tabs.create({ url: result.authorizationUrl });
     $('auth-status').textContent = '請在新分頁完成 Shopee 測試店鋪授權。';
   } catch (error) { showError(error); }
-});
-
-$('load-items').addEventListener('click', async () => {
-  try {
-    const data = await api('/api/items?status=NORMAL&pageSize=100');
-    const items = data.item || [];
-    $('results').className = 'results';
-    $('results').textContent = `在架商品：${data.total_count ?? items.length} 件\n本頁 ID：${items.map(item => item.item_id).join('、') || '無'}`;
-  } catch (error) { showError(error); }
-});
-
-$('load-ads').addEventListener('click', async () => {
-  try {
-    const data = await api('/api/ads?limit=100');
-    const campaigns = data.campaign_list || [];
-    $('results').className = 'results';
-    $('results').textContent = `本頁廣告活動：${campaigns.length} 個\n活動 ID：${campaigns.map(item => item.campaign_id).join('、') || '無'}`;
-  } catch (error) { showError(error); }
-});
-
-$('calculate').addEventListener('click', async () => {
-  try {
-    const values = calculatorValues();
-    const result = calculateProfit(values);
-    $('calculator-result').className = 'results';
-    $('calculator-result').textContent = `到手 CNY ${money(result.rmbValue)}\n總成本 CNY ${money(result.totalCost)}\n利潤 CNY ${money(result.profit)}\n利潤率 ${result.profitRate == null ? '—' : money(result.profitRate) + '%'}\nROI ${result.roi == null ? '—' : money(result.roi)}`;
-    try { await saveCalculatorSettings(); }
-    catch (error) { $('calculator-result').textContent += `\n設定未保存：${error.message || String(error)}`; }
-  } catch (error) { showError(error, 'calculator-result'); }
 });
 
 initialize();

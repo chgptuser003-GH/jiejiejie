@@ -232,3 +232,22 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .flash-current { display: flex; gap: 8px; align-items: center; margin: 12px 0; padding: 11px 13px; border: 1px solid #e1e6ed; border-radius: 7px; }
 .flash-current strong { color: #b9630e; }
 .flash-layout .shipping-actions { justify-content: flex-start; }
+.operation-dialog {
+  width: min(920px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 20px 60px #0003;
+}
+.operation-dialog::backdrop { background: #17202b80; }
+.operation-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.operation-dialog-heading h3 { margin: 0; }
+.operation-dialog-body > .tool { margin: 12px 0; }

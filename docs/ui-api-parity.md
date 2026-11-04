@@ -1,13 +1,13 @@
-# 原版 6.9.9 與 CF 0.9.22：UI／API 對照驗收
+# 原版 6.9.9 與 CF 0.9.23：UI／API 對照驗收
 
 依據使用者提供的 `shopee插件助手 10.2.zip`，核對原版 `popup.html`、`dashboard.html`、`topup.html`、`shipping-console.html`、`marketing-console.html`、`product-management.html` 及其 JS；新版依據 `extension/`、`open-platform/` 與臺灣沙盒店鋪實測記錄。本文件只記錄可證實的狀態。「有欄位」不等於「功能可用」，也不代表版面逐像素一致。
 
 ## UI 對照
 
-| 畫面 | 原版 | CF 0.9.22 | 尚有差異 |
+| 畫面 | 原版 | CF 0.9.23 | 尚有差異 |
 |---|---|---|---|
-| 彈窗 | 7 個工具卡片、站點選擇、狀態；另有原作者帳號／授權系統 | 7 個工具卡片、TW 沙盒標籤、後端連線及授權狀態 | 工具卡片排版接近；原作者帳密系統未移植，改用 Shopee OAuth 和本機配對；多站點尚未做 |
-| 廣告控制台 | 12 個導航頁籤，專屬表單、任務進度和日誌 | 12 個導航入口均按原版主要分區重排；部分頁籤有真正沙盒工具 | 原版各頁複雜的彈窗、篩選互動、分區細節及表格尚未完整重建；不能宣稱像素一致 |
+| 彈窗 | 7 個工具卡片、站點選擇、狀態；另有原作者帳號／授權系統 | 7 個工具卡片、TW 沙盒標籤、後端連線及授權狀態；額外測試查詢與快速計算已移除 | 工具卡片排版接近；原作者帳密系統未移植，改用 Shopee OAuth 和本機配對；多站點尚未做 |
+| 廣告控制台 | 12 個導航頁籤，專屬表單、任務進度和日誌 | 12 個導航入口按原版主要分區重排；額外的下方測試面板已從主畫面移除，部分核對流程由原版按鈕開啟視窗 | 原版各頁複雜的彈窗、篩選互動、分區細節及表格尚未完整重建；不能宣稱像素一致 |
 | 預算水位線 | 多規則編輯、商品選擇器、時間窗、23:55 動作、日誌 | 多規則表單、新增／移除／複製、在架商品分頁選擇與進行中廣告對照、時間窗與次日欄位聯動、單條規則的樣本數值計算；規則草稿保存在本機 Chrome storage，重開控制台可還原 | 選擇器仍無原版的 ROI 類型、日期、標題、績效排序和跨頁全選；廣告掃描上限 1000 活動；時間窗計算、排程、店鋪寫入與執行日誌未接入；草稿不會在不同電腦之間同步 |
 | 發貨／物流 | 備貨天數、物流、現貨預售、隔日達、贈品／SKU 聯動 | 五個入口均有按原版主要分區重排的頁面；可對前 100 件商品做只讀範圍、選取或 ID 核對 | 銷量、特賣、滿額贈排除、渠道選擇、備貨天數詳情、批量寫入、進度與恢復快照未重建 |
 | 行銷 | 組合促銷、折扣、滿額贈的獨立頁籤、參數與任務日誌 | 3 個入口均按原版主要表單重排；可只讀核對前 100 件在架商品 | 活動選擇清單、商品資格、衝突提示、寫入與任務日誌未重建 |
@@ -23,14 +23,14 @@
 | 全店開啟廣告 | `daily-budget`、`exclude-ids`、`target-value`、`global-rapid-boost`、`start-process`、`start-system-roi`、`query-no-ads-products` | 只讀投放範圍預覽；兩種批量建立按鈕停用 |
 | 批量開廣告群組 | `group-roi-target`、`group-daily-budget`、`group-exclude-ids`、`btn-start-ad-groups` | 表單可檢視；建立按鈕停用，官方 GMV Max 尚未證實等價 |
 | CPC 監控自動重開 | `monitor-target-ids`、`monitor-cpc-threshold`、`monitor-roi-type`、`monitor-budget`、`monitor-roi-target`、`monitor-rapid-boost`、`monitor-reopen-delay`、`btn-start-cpc-monitor`、`btn-stop-cpc-monitor` | 下方可查績效；監控排程和重開按鈕停用 |
-| 批量刪除廣告 | `delete-exclude-ids`、`delete-only-ids`、`btn-delete-all`、`btn-delete-by-ids` | 可按指定或排除商品 ID 只讀預覽最多 1000 個活動，逐筆標示廣告類型、商品關聯、無法確認的原因及掃描完整性；可下載 CSV 核對表。批量刪除按鈕停用，官方手動選品刪除動作未經沙盒實測 |
+| 批量刪除廣告 | `delete-exclude-ids`、`delete-only-ids`、`btn-delete-all`、`btn-delete-by-ids` | 原版按鈕目前只開啟只讀核對視窗，可預覽最多 1000 個活動、廣告類型、商品關聯與不明原因；不會送出刪除。額外的預覽及 CSV 按鈕已移除 |
 | 商品批量操作 | `product-ids`、`exclude-product-ids`、`product-operation-select`、`unlist-sales-max`、`relist-max-count`、`btn-execute-product-operation` | 操作類型切換會顯示對應欄位；下方商品查詢可用，批量寫入停用 |
-| 指定商品開廣告 | `manual-ids`、`manual-budget`、`manual-roi`、`manual-rapid-boost`、`btn-open-manual-roi`、`auto-ids`、`auto-budget`、`btn-open-auto-roi` | 上方自動 ROI 區按鈕可帶入下方最多 10 件的沙盒平台自動競價預覽；須核對在架與既有廣告，另行確認後才逐件建立並讀回。單件平台自動競價已實測，批量介面未實測；與原版系統 ROI 尚未證實等價。手動 ROI、加速推廣仍停用 |
-| 批量修改 ROI／預算 | `edit-roi-target`、`edit-roi-rapid-boost`、`edit-roi-exclude-ids`、`edit-roi-only-ids`、`btn-edit-roi-all`、`btn-edit-roi-by-ids`、`edit-budget-target`、`edit-budget-exclude-ids`、`edit-budget-only-ids`、`btn-edit-budget-all`、`btn-edit-budget-by-ids` | 上方預算與正數目標 ROAS 按鈕可按商品 ID 完整掃描、核對廣告，最多 10 活動帶入下方各自的安全預覽；僅 manual 競價可預覽 ROAS 修改。下方明確確認後才逐筆寫入及讀回。ROI=0 系統模式切換、加速推廣及 auto 競價 ROAS 修改未接通；批量介面未實測 |
+| 指定商品開廣告 | `manual-ids`、`manual-budget`、`manual-roi`、`manual-rapid-boost`、`btn-open-manual-roi`、`auto-ids`、`auto-budget`、`btn-open-auto-roi` | 上方自動 ROI 區的原版按鈕可開啟最多 10 件的平台自動競價核對視窗；須確認後才逐件建立並讀回。單件平台自動競價已實測，批量介面未實測；與原版系統 ROI 尚未證實等價。手動 ROI、加速推廣仍停用 |
+| 批量修改 ROI／預算 | `edit-roi-target`、`edit-roi-rapid-boost`、`edit-roi-exclude-ids`、`edit-roi-only-ids`、`btn-edit-roi-all`、`btn-edit-roi-by-ids`、`edit-budget-target`、`edit-budget-exclude-ids`、`edit-budget-only-ids`、`btn-edit-budget-all`、`btn-edit-budget-by-ids` | 原版按鈕可按商品 ID 完整掃描、核對廣告，最多 10 活動，核對視窗內明確確認後才逐筆寫入及讀回。正數 ROAS 僅 manual 競價可用；ROI=0 系統模式切換、加速推廣及 auto 競價 ROAS 修改未接通，批量介面未實測 |
 | 加速推廣控制 | `rapid-boost-mode`、`rapid-boost-ids`、`btn-enable-rapid-boost`、`btn-disable-rapid-boost` | 模式切換顯示 ID 欄位；寫入停用，官方 `enhanced_cpc` 尚未證實等於原版加速推廣 |
 | 重開廣告 | `reopen-manual-budget`、`reopen-manual-roi`、`reopen-manual-rapid-boost`、`reopen-manual-mode`、`reopen-manual-delay`、`reopen-manual-ids`、`btn-reopen-manual-ads`；系統 ROI 對應 `reopen-auto-*` 欄位 | 手動／系統兩區及模式、延時選項可檢視；刪除後重建流程停用 |
-| 批量篩選廣告 | `md-date-preset`、`md-state`、曝光／點擊／CPC／ROI／目標 ROI／花費條件、`md-rapid-boost-filter`、`md-match`、`md-only-ids`、`md-exclude-ids`、預覽／下載／刪除按鈕 | 上方原版表單的只讀查詢、預覽、活動表與商品 ID CSV 已接線，支援可核對數據條件的任一／全部匹配；加速狀態須選全部，刪除停用。下方仍有簡化只讀工具 |
-| 廣告健康檢查 | `hc-state`、`btn-healthcheck`、`hc-result` | 上方按狀態掃描與下方工具共用最多 10 頁的只讀資料檢查；結果分需核對設定、資料未確認與已核對欄位。蝦皮違規原因及商品標題未接，不能當作違規判定 |
+| 批量篩選廣告 | `md-date-preset`、`md-state`、曝光／點擊／CPC／ROI／目標 ROI／花費條件、`md-rapid-boost-filter`、`md-match`、`md-only-ids`、`md-exclude-ids`、預覽／下載／刪除按鈕 | 原版表單的只讀查詢、預覽、活動表與商品 ID CSV 已接線，支援可核對數據條件的任一／全部匹配；加速狀態須選全部，刪除停用。額外的簡化工具面板已移除 |
+| 廣告健康檢查 | `hc-state`、`btn-healthcheck`、`hc-result` | 原版按鈕可按狀態掃描最多 10 頁的只讀資料；結果分需核對設定、資料未確認與已核對欄位。額外的下方工具面板已移除；蝦皮違規原因及商品標題未接 |
 | 修改標題 | `product-ids-input`、`product-ids-progress`、`select-product-btn`、`selected-product-info`、`keyword-search-input`、`keywords-table` | 可只讀核對前 100 件在架商品中的指定 ID；標題詳情、寫入和推薦關鍵詞未接入 |
 
 相同 ID 和主要欄位順序方便後續逐項接線，但**不代表原版運作邏輯已移植**。CF 仍需要正式的 API 權限、批量任務、逐筆回查與沙盒驗收。
