@@ -10,7 +10,7 @@ export const modules = [
       { id: 'ads-boost', name: '加速推廣控制', status: 'mapping', summary: '批量開關手動 ROAS 廣告的加速推廣。', details: '尚未核實官方 API 有與舊版「加速推廣」完全相同的設定。' },
       { id: 'ads-reopen', name: '重開廣告', status: 'partial', summary: '按指定商品延時重開，保留預算和 ROAS 設定。', details: '舊版採刪除再建立，需先完成快照、預覽和失敗恢復，避免投放中斷。' },
       { id: 'ads-filter', name: '批量篩選廣告', status: 'partial', summary: '依曝光、點擊、花費、CPC、ROAS、狀態等條件篩選與匯出。', details: '原版上方表單已接入最多 10 頁、1000 個活動的只讀查詢，支援日期、活動狀態、指定／排除商品 ID、曝光、點擊、CPC、ROAS、目標 ROAS 與花費的任一／全部匹配；完整掃描可下載活動表及匹配 ID。下方保留簡化只讀工具。加速狀態和批量刪除尚未接通，活動層級績效不等同逐商品績效。', tool: 'ad-filter' },
-      { id: 'ads-health', name: '廣告健康檢查', status: 'partial', summary: '掃描活動狀態、異常和商品資訊。', details: '已接入最多 10 頁、1000 個活動的只讀設定、商品狀態與當日績效檢查；商品清單仍只讀前 100 件，查不到的商品標未確認。蝦皮違規原因與真正全店無上限掃描尚未接入。', tool: 'ad-health' },
+      { id: 'ads-health', name: '廣告健康檢查', status: 'partial', summary: '掃描活動狀態、異常和商品資訊。', details: '原版上方「開始掃描」及下方工具共用最多 10 頁、1000 個活動的只讀設定、商品狀態與當日績效檢查；結果區分需核對設定、資料未確認與已核對欄位。商品清單只讀前 100 件；零曝光不視為違規。蝦皮違規原因、商品標題與無上限全店掃描尚未接入。', tool: 'ad-health' },
     ],
   },
   {

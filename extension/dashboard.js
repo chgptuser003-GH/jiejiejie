@@ -4,6 +4,7 @@ import { evaluateBudgetTopup } from './budget-rule.js';
 import { scanCampaignPages } from './campaign-scan.js';
 import { parseItemIds, selectDeletionCandidates } from './campaign-selection.js';
 import { dateRangeFromPreset, matchesCampaignMetrics, matchesMetricConditions, summarizeDailyMetrics } from './ad-filter.js';
+import { classifyCampaignHealth } from './ad-health.js';
 
 const BASE = 'http://127.0.0.1:8787';
 const BUDGET_DRAFT_KEY = 'cfBudgetRulesDraftV1';
@@ -694,6 +695,81 @@ function appendFilterTool(container) {
   container.append(panel);
 }
 
+async function scanAdHealth({ offset = 0, pageSize = 100, maxPages = 10,
+  date = todayTaipei(), state = 'all', onProgress = () => {} } = {}) {
+  const pageOffset = Number(offset);
+  const pageLimit = Number(pageSize);
+  const pages = Number(maxPages);
+  if (!Number.isSafeInteger(pageOffset) || pageOffset < 0
+    || !Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 100
+    || !Number.isSafeInteger(pages) || pages < 1 || pages > 10) {
+    throw new Error('起始位置須為非負整數，每頁上限須為 1–100，最多讀取 10 頁。');
+  }
+  const day = dateForApi(date);
+  const products = await Promise.allSettled([
+    api('/api/items?status=NORMAL&status=UNLIST&status=BANNED&status=REVIEWING&pageSize=100'),
+  ]);
+  const productResult = products[0];
+  const productById = new Map((productResult.status === 'fulfilled'
+    ? productResult.value.item || [] : []).map(item => [String(item.item_id), item.item_status]));
+  const rows = [];
+  const counts = { review: 0, unknown: 0, checked: 0 };
+  let performanceUnavailable = false;
+  const scan = await scanCampaignPages({
+    startOffset: pageOffset, pageSize: pageLimit, maxPages: pages,
+    fetchPage: ({ offset: nextOffset, limit }) => api(`/api/ads?limit=${limit}&offset=${nextOffset}`),
+    onPage: async (campaigns, { page }) => {
+      onProgress(page, rows.length);
+      if (!campaigns.length) return;
+      const joined = encodeURIComponent(campaigns.map(item => item.campaign_id).join(','));
+      const [settingsResult, performanceResult] = await Promise.allSettled([
+        api(`/api/ads/settings?ids=${joined}`),
+        api(`/api/ads/daily?ids=${joined}&startDate=${day}&endDate=${day}`),
+      ]);
+      if (settingsResult.status === 'rejected') throw settingsResult.reason;
+      if (performanceResult.status === 'rejected') performanceUnavailable = true;
+      const settingsById = new Map((settingsResult.value.campaign_list || [])
+        .map(item => [String(item.campaign_id), item]));
+      const metricsById = new Map((performanceResult.status === 'fulfilled'
+        ? performanceResult.value.campaign_list || [] : [])
+        .map(item => [String(item.campaign_id), item.metrics_list || []]));
+      for (const listedCampaign of campaigns) {
+        const id = String(listedCampaign.campaign_id);
+        const info = settingsById.get(id)?.common_info;
+        if (state !== 'all' && info?.campaign_status !== state && info) continue;
+        const itemIds = Array.isArray(info?.item_id_list) ? info.item_id_list.map(String) : [];
+        const metrics = summarizeDailyMetrics(metricsById.get(id) || []);
+        const result = classifyCampaignHealth({
+          info, productById, productsAvailable: productResult.status === 'fulfilled',
+          metricsAvailable: performanceResult.status === 'fulfilled', impressions: metrics.impressions,
+        });
+        counts[result.level]++;
+        rows.push([id, info?.ad_name, info?.campaign_status, info?.campaign_budget,
+          itemIds.join('、'), itemIds.map(itemId => `${itemId}: ${productById.get(itemId) || '未確認'}`).join('；'),
+          metrics.impressions === null ? '—' : `${metrics.impressions}／${metrics.clicks ?? '—'}`,
+          result.level === 'review' ? '需核對設定' : result.level === 'unknown' ? '資料未確認' : '已核對欄位',
+          result.notes.length ? result.notes.join('；') : '已檢查欄位未見異常']);
+      }
+    },
+  });
+  return { rows, counts, scan, productResult, performanceUnavailable };
+}
+
+function renderAdHealth(target, result) {
+  table(target, ['活動 ID', '名稱', '狀態', '預算 TWD', '商品 ID', '商品狀態',
+    '曝光／點擊', '分類', '說明'], result.rows);
+  target.prepend(node('p', 'query-summary',
+    `已讀取 ${result.scan.pages} 頁、${result.scan.scanned} 個活動；需核對設定 ${result.counts.review}、資料未確認 ${result.counts.unknown}、已核對欄位 ${result.counts.checked}。`
+    + (result.scan.complete ? '' : `後面還有活動，請從位置 ${result.scan.nextOffset} 繼續。`)));
+  if (result.productResult.status !== 'fulfilled' || result.productResult.value.has_next_page) {
+    target.append(node('p', 'query-note', '商品狀態只讀取前 100 件；沒有讀到的商品標為未確認。'));
+  }
+  if (result.performanceUnavailable) {
+    target.append(node('p', 'query-note', '部分績效無法讀取，沒有把缺資料視為零曝光。'));
+  }
+  target.append(node('p', 'query-note', '這是資料檢查，不代表 Shopee 違規判定。'));
+}
+
 function appendHealthTool(container) {
   const { panel, fields, output } = toolPanel('沙盒廣告健康檢查',
     '逐頁檢查最多 10 頁／1000 個活動的設定、關聯商品狀態及指定日期績效。結果是資料檢查，不代表蝦皮違規判定。');
@@ -701,89 +777,15 @@ function appendHealthTool(container) {
   const limit = field(fields, '每頁活動上限', 'health-limit', { value: '100', min: '1', step: '1' });
   const maxPages = field(fields, '最多讀取頁數（1–10）', 'health-pages', { value: '10', min: '1', step: '1' });
   const date = field(fields, '績效日期', 'health-date', { type: 'date', value: todayTaipei() });
+  const state = field(fields, '活動狀態', 'health-state', { options: [
+    ['all', '全部'], ['ongoing', '只看進行中'],
+  ] });
   runButton(panel, output, async target => {
-    const pageOffset = Number(offset.value);
-    const pageLimit = Number(limit.value);
-    if (!Number.isSafeInteger(pageOffset) || pageOffset < 0
-      || !Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > 100) {
-      throw new Error('起始位置須為非負整數，本頁上限須為 1–100。');
-    }
-    const day = dateForApi(date.value);
-    const productsResult = (await Promise.allSettled([
-      api('/api/items?status=NORMAL&status=UNLIST&status=BANNED&status=REVIEWING&pageSize=100'),
-    ]))[0];
-    const productById = new Map((productsResult.status === 'fulfilled'
-      ? productsResult.value.item || [] : []).map(item => [String(item.item_id), item.item_status]));
-    const rows = [];
-    let needsReview = 0;
-    let performanceUnavailable = false;
-    const scan = await scanCampaignPages({
-      startOffset: pageOffset, pageSize: pageLimit, maxPages: Number(maxPages.value),
-      fetchPage: ({ offset: nextOffset, limit: nextLimit }) => api(`/api/ads?limit=${nextLimit}&offset=${nextOffset}`),
-      onPage: async (campaigns, { page }) => {
-        target.textContent = `正在檢查第 ${page} 頁；已讀取 ${rows.length} 個活動…`;
-        if (!campaigns.length) return;
-        const joined = encodeURIComponent(campaigns.map(item => item.campaign_id).join(','));
-        const [settingsResult, performanceResult] = await Promise.allSettled([
-          api(`/api/ads/settings?ids=${joined}`),
-          api(`/api/ads/daily?ids=${joined}&startDate=${day}&endDate=${day}`),
-        ]);
-        if (settingsResult.status === 'rejected') throw settingsResult.reason;
-        const settings = settingsResult.value;
-        if (performanceResult.status === 'rejected') performanceUnavailable = true;
-        const settingsById = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
-        const metricsById = new Map((performanceResult.status === 'fulfilled'
-          ? performanceResult.value.campaign_list || [] : []).map(item => [String(item.campaign_id), item.metrics_list || []]));
-        for (const listedCampaign of campaigns) {
-      const id = String(listedCampaign.campaign_id);
-      const info = settingsById.get(id)?.common_info;
-      if (!info) {
-        needsReview++;
-        rows.push([id, '—', '—', '—', '—', '—', '—', '設定資料未回傳，請單獨查詢']);
-        continue;
-      }
-      const itemIds = (info.item_id_list || []).map(String);
-      const itemStates = itemIds.map(itemId => `${itemId}: ${productById.get(itemId) || '未確認'}`);
-      const metrics = metricsById.get(id) || [];
-      const impressions = metrics.reduce((sum, metric) => sum + Number(metric.impression || 0), 0);
-      const clicks = metrics.reduce((sum, metric) => sum + Number(metric.clicks || 0), 0);
-      const findings = [];
-      let flag = false;
-      if (!itemIds.length) { findings.push('關聯商品 ID 未回傳'); flag = true; }
-      if (!Number.isFinite(Number(info.campaign_budget)) || Number(info.campaign_budget) <= 0) {
-        findings.push('每日預算缺失或非正數'); flag = true;
-      }
-      for (const itemId of itemIds) {
-        const itemStatus = productById.get(itemId);
-        if (itemStatus && itemStatus !== 'NORMAL') {
-          findings.push(`商品 ${itemId} 狀態：${itemStatus}`);
-          flag = true;
-        }
-      }
-      if (info.campaign_status !== 'ongoing') findings.push(`活動目前 ${info.campaign_status}`);
-      if (productsResult.status !== 'fulfilled' || itemIds.some(itemId => !productById.has(itemId))) {
-        findings.push('部分商品狀態未確認');
-      }
-      if (performanceResult.status !== 'fulfilled') findings.push('績效暫時無法讀取');
-      else if (info.campaign_status === 'ongoing' && !metrics.length) findings.push('當日尚無績效資料');
-      else if (info.campaign_status === 'ongoing' && impressions === 0) findings.push('當日尚無曝光');
-      if (flag) needsReview++;
-      rows.push([id, info.ad_name, info.campaign_status, info.campaign_budget,
-        itemIds.join('、'), itemStates.join('；'),
-        performanceResult.status === 'fulfilled' ? `${impressions}／${clicks}` : '—',
-        findings.length ? findings.join('；') : '已檢查欄位未見異常']);
-        }
-      },
+    const result = await scanAdHealth({ offset: offset.value, pageSize: limit.value,
+      maxPages: maxPages.value, date: date.value, state: state.value,
+      onProgress: (page, count) => { target.textContent = `正在檢查第 ${page} 頁；已讀取 ${count} 個活動…`; },
     });
-    table(target, ['活動 ID', '名稱', '狀態', '預算 TWD', '商品 ID', '商品狀態', '曝光／點擊', '檢查結果'], rows);
-    target.prepend(node('p', 'query-summary',
-      `已讀取 ${scan.pages} 頁、${scan.scanned} 個活動；${needsReview} 個需要核對設定或商品${scan.complete ? '。' : `；後面還有活動，請從位置 ${scan.nextOffset} 繼續。`}`));
-    if (productsResult.status === 'fulfilled' && productsResult.value.has_next_page) {
-      target.append(node('p', 'query-note', '商品清單只讀取前 100 件；未找到的商品狀態一律標為未確認。'));
-    }
-    if (performanceUnavailable || productsResult.status === 'rejected') {
-      target.append(node('p', 'query-note', '部分只讀資料暫時不可用；對應欄位已標為未確認。'));
-    }
+    renderAdHealth(target, result);
   }, '開始檢查');
   container.append(panel);
 }
@@ -1736,12 +1738,33 @@ function appendHealthLayout(detail, feature) {
   states.append(legacyRadio('hc-state', 'hc-ongoing', 'ongoing', '只看進行中', true),
     legacyRadio('hc-state', 'hc-all', 'all', '全部'));
   form.append(states, node('p', 'group-intro', '原版按總數分頁掃描廣告，標註異常商品 ID 與標題。'),
-    legacyAction('🔍 掃描違規／異常狀態', '檢查廣告是否存在違規或異常情況。',
+    legacyAction('🔍 掃描違規／異常狀態', '只讀核對活動設定、商品狀態和當日績效；不判定蝦皮違規。',
       '開始掃描', 'btn-healthcheck', 'secondary'));
   const result = node('div', 'output');
   result.id = 'hc-result';
+  result.textContent = '選擇狀態後按「開始掃描」。';
   form.append(result);
   detail.append(form);
+  const button = form.querySelector('#btn-healthcheck');
+  button.disabled = false;
+  button.title = '使用 Shopee Open Platform 沙盒做只讀資料檢查';
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    result.className = 'output';
+    result.textContent = '正在讀取廣告資料…';
+    try {
+      const state = form.querySelector('input[name="hc-state"]:checked')?.value || 'ongoing';
+      const data = await scanAdHealth({ state, onProgress: (page, count) => {
+        result.textContent = `正在檢查第 ${page} 頁；已讀取 ${count} 個活動…`;
+      } });
+      renderAdHealth(result, data);
+    } catch (error) {
+      result.className = 'output error';
+      result.textContent = error.message || String(error);
+    } finally {
+      button.disabled = false;
+    }
+  });
   legacyStatus(detail, feature);
   appendHealthTool(detail);
 }
