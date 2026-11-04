@@ -3,7 +3,7 @@ import { calculateProfit, DEFAULT_CALCULATOR_SETTINGS } from './calculator.js';
 import { evaluateBudgetTopup } from './budget-rule.js';
 import { scanCampaignPages } from './campaign-scan.js';
 import { parseItemIds, selectDeletionCandidates } from './campaign-selection.js';
-import { matchesCampaignMetrics } from './ad-filter.js';
+import { dateRangeFromPreset, matchesCampaignMetrics, matchesMetricConditions, summarizeDailyMetrics } from './ad-filter.js';
 
 const BASE = 'http://127.0.0.1:8787';
 const BUDGET_DRAFT_KEY = 'cfBudgetRulesDraftV1';
@@ -100,6 +100,21 @@ function table(output, headers, rows) {
   }
   element.append(head, body);
   output.append(element);
+}
+
+function downloadCsv(headers, rows, filename) {
+  const escapeCell = value => {
+    let text = String(value ?? '');
+    if (/^[=+@-]/.test(text)) text = `'${text}`;
+    return `"${text.replaceAll('"', '""')}"`;
+  };
+  const csv = '\uFEFF' + [headers, ...rows].map(row => row.map(escapeCell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = node('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function dateForApi(value) {
@@ -673,18 +688,7 @@ function appendFilterTool(container) {
   }, '篩選活動');
   exportButton.addEventListener('click', () => {
     if (!exportRows) return;
-    const escapeCell = value => {
-      let text = String(value ?? '');
-      if (/^[=+@-]/.test(text)) text = `'${text}`;
-      return `"${text.replaceAll('"', '""')}"`;
-    };
-    const csv = '\uFEFF' + [columns, ...exportRows].map(row => row.map(escapeCell).join(',')).join('\r\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const link = node('a');
-    link.href = url;
-    link.download = `cf-shopee-ads-${todayTaipei()}.csv`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    downloadCsv(columns, exportRows, `cf-shopee-ads-${todayTaipei()}.csv`);
   });
   panel.append(exportButton);
   container.append(panel);
@@ -1572,16 +1576,155 @@ function appendFilterLayout(detail, feature) {
     button.type = 'button'; button.id = id; button.disabled = true;
     actions.append(button);
   }
+  const queryButton = actions.querySelector('#btn-start-query-ads');
+  const previewButton = actions.querySelector('#btn-preview-metric-delete');
+  const tableButton = actions.querySelector('#btn-download-product-performance');
+  const idsButton = actions.querySelector('#btn-download-matched-results');
+  queryButton.disabled = false;
+  previewButton.title = '定位只讀篩選結果；不會刪除廣告';
   products.append(actions);
   const result = node('div', 'legacy-filter-result');
   result.append(legacyControl('匹配的商品 ID（共 0 個）', 'matched-product-ids', {
     kind: 'textarea', placeholder: '查詢匹配的商品 ID 將顯示在這裡…',
   }).wrapper);
   result.querySelector('textarea').readOnly = true;
+  const resultTable = node('div', 'output', '設定條件後按「查詢廣告」。');
+  result.append(node('p', 'query-note', '此處使用活動層級的每日績效；一個活動若包含多個商品，數據不會拆成各商品績效。'), resultTable);
   products.append(result);
   columns.append(criteria, products);
   form.append(columns);
   detail.append(form);
+  let exportRows = null;
+  let matchedIds = null;
+  let queryVersion = 0;
+  const invalidate = () => {
+    queryVersion++;
+    exportRows = matchedIds = null;
+    previewButton.disabled = tableButton.disabled = idsButton.disabled = true;
+    $('matched-product-ids').value = '';
+    result.querySelector('label').firstChild.nodeValue = '匹配的商品 ID（共 0 個）';
+    if (!queryButton.disabled) resultTable.textContent = '條件已變更，請重新查詢。';
+  };
+  form.addEventListener('input', invalidate);
+  form.addEventListener('change', invalidate);
+  const readNumber = (id, label, required = false) => {
+    const raw = $(id).value.trim();
+    if (!raw && !required) return null;
+    const value = Number(raw);
+    if (!raw || !Number.isFinite(value) || value < 0) throw new Error(`${label} 必須是非負數。`);
+    return value;
+  };
+  const readConditions = () => {
+    const conditions = [];
+    if ($('md-no-impression').checked) conditions.push({ metric: 'impressions', op: 'eq', value: 0 });
+    if ($('md-imp-lt-en').checked) {
+      conditions.push({ metric: 'impressions', op: 'lt', value: readNumber('md-imp-lt', '瀏覽量上限', true) });
+    }
+    if ($('md-no-click').checked) conditions.push({ metric: 'clicks', op: 'eq', value: 0 });
+    if ($('md-view-noclick').checked) conditions.push({ op: 'view_no_click' });
+    const clickLimit = readNumber('md-click-lt', '點擊量上限');
+    if (clickLimit !== null) conditions.push({ metric: 'clicks', op: 'lt', value: clickLimit });
+    for (const [prefix, metric, label] of [
+      ['cpc', 'cpc', 'CPC'], ['roi', 'roi', 'ROAS'],
+      ['target-roi', 'targetRoi', '目標 ROAS'], ['cost', 'spend', '花費'],
+    ]) {
+      const value = readNumber(`md-${prefix}-val`, label);
+      if (value === null) continue;
+      const op = $(`md-${prefix}-op`).value;
+      const condition = { metric, op, value };
+      if (op === 'range') {
+        condition.upper = readNumber(`md-${prefix}-val2`, `${label} 區間上限`, true);
+        if (condition.upper < value) throw new Error(`${label} 區間上限不能小於下限。`);
+      }
+      conditions.push(condition);
+    }
+    return conditions;
+  };
+  queryButton.addEventListener('click', async () => {
+    invalidate();
+    const version = queryVersion;
+    queryButton.disabled = true;
+    resultTable.className = 'output';
+    resultTable.textContent = '正在核對篩選條件…';
+    try {
+      if ($('md-rapid-boost-filter').value !== 'all') {
+        throw new Error('加速推廣狀態尚無已驗證的對應欄位，請選「全部」。');
+      }
+      const dates = dateRangeFromPreset(todayTaipei(), $('md-date-preset').value);
+      const state = form.querySelector('input[name="md-state"]:checked')?.value || 'ongoing';
+      const mode = form.querySelector('input[name="md-match"]:checked')?.value || 'any';
+      const onlyIds = parseItemIds($('md-only-ids').value);
+      const excludedIds = parseItemIds($('md-exclude-ids').value);
+      const conditions = readConditions();
+      const columns = ['活動 ID', '名稱', '狀態', '商品 ID', '曝光', '點擊',
+        'CPC TWD', '花費 TWD', 'ROAS', '目標 ROAS'];
+      const rows = [];
+      const productMatches = new Set();
+      const scan = await scanCampaignPages({
+        maxPages: 10, pageSize: 100,
+        fetchPage: ({ offset, limit }) => api(`/api/ads?limit=${limit}&offset=${offset}`),
+        onPage: async (campaigns, { page }) => {
+          resultTable.textContent = `正在讀取第 ${page} 頁；目前符合 ${rows.length} 個活動…`;
+          if (!campaigns.length) return;
+          const ids = campaigns.map(item => String(item.campaign_id));
+          const joined = encodeURIComponent(ids.join(','));
+          const [settings, performance] = await Promise.all([
+            api(`/api/ads/settings?ids=${joined}`),
+            api(`/api/ads/daily?ids=${joined}&startDate=${dateForApi(dates.start)}&endDate=${dateForApi(dates.end)}`),
+          ]);
+          const byId = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
+          if (ids.some(id => !byId.get(id)?.common_info)) {
+            throw new Error('部分活動設定未回傳，已停止查詢。');
+          }
+          const performanceById = new Map((performance.campaign_list || [])
+            .map(item => [String(item.campaign_id), item.metrics_list || []]));
+          for (const campaign of campaigns) {
+            const id = String(campaign.campaign_id);
+            const detail = byId.get(id);
+            const info = detail.common_info;
+            const productIds = Array.isArray(info.item_id_list) ? info.item_id_list.map(String) : [];
+            if (state !== 'all' && info.campaign_status !== state) continue;
+            if (onlyIds.size && !productIds.some(itemId => onlyIds.has(itemId))) continue;
+            if (productIds.some(itemId => excludedIds.has(itemId))) continue;
+            const metrics = performanceById.get(id) || [];
+            const { impressions, clicks, spend, cpc, roi } = summarizeDailyMetrics(metrics);
+            const rawTarget = detail.auto_bidding_info?.roas_target;
+            const targetRoi = rawTarget == null || !Number.isFinite(Number(rawTarget))
+              ? null : Number(rawTarget);
+            if (!matchesMetricConditions({ impressions, clicks, cpc, roi, spend, targetRoi }, conditions, mode)) continue;
+            rows.push([id, info.ad_name, info.campaign_status, productIds.join('、'),
+              impressions, clicks, cpc?.toFixed(2), spend?.toFixed(2), roi?.toFixed(2), targetRoi]);
+            for (const itemId of productIds) productMatches.add(itemId);
+          }
+        },
+      });
+      table(resultTable, columns, rows);
+      resultTable.prepend(node('p', 'query-summary',
+        `已讀取 ${scan.scanned} 個活動，符合 ${rows.length} 個；${scan.complete ? '活動清單已讀完。' : '仍有後續活動，以下僅為部分結果。'}`));
+      const matched = [...productMatches];
+      $('matched-product-ids').value = matched.join('\n');
+      result.querySelector('label').firstChild.nodeValue = `匹配的商品 ID（共 ${matched.length} 個）`;
+      if (version === queryVersion) {
+        previewButton.disabled = false;
+        exportRows = scan.complete && rows.length ? { columns, rows } : null;
+        matchedIds = scan.complete && matched.length ? matched : null;
+        tableButton.disabled = !exportRows;
+        idsButton.disabled = !matchedIds;
+      } else resultTable.append(node('p', 'query-note', '查詢期間條件已改變；請重新查詢後再下載。'));
+    } catch (error) {
+      resultTable.className = 'output error';
+      resultTable.textContent = error.message || String(error);
+    } finally {
+      queryButton.disabled = false;
+    }
+  });
+  previewButton.addEventListener('click', () => resultTable.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  tableButton.addEventListener('click', () => {
+    if (exportRows) downloadCsv(exportRows.columns, exportRows.rows, `cf-shopee-filter-${todayTaipei()}.csv`);
+  });
+  idsButton.addEventListener('click', () => {
+    if (matchedIds) downloadCsv(['商品 ID'], matchedIds.map(id => [id]), `cf-shopee-filter-items-${todayTaipei()}.csv`);
+  });
   legacyStatus(detail, feature);
   appendFilterTool(detail);
 }
