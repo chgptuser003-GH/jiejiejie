@@ -171,6 +171,13 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .budget-rule-row { padding: 14px; border: 1px solid #dce3ec; border-radius: 8px; background: #fff; }
 .budget-rule-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .budget-rule-head-actions { display: flex; align-items: center; gap: 8px; }
+.budget-picker-dialog { width: min(850px, 92vw); max-height: 85vh; border: 0; border-radius: 12px; padding: 20px; box-shadow: 0 20px 60px #0004; color: #243044; }
+.budget-picker-dialog::backdrop { background: #0006; }
+.budget-picker-dialog h3 { margin: 0 0 8px; }
+.budget-picker-search { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #d1d5db; border-radius: 7px; }
+.budget-picker-list { display: grid; gap: 4px; max-height: 48vh; overflow-y: auto; padding: 8px 0; }
+.budget-picker-item { display: flex; align-items: center; gap: 10px; padding: 9px; border: 1px solid #e3e8ef; border-radius: 6px; }
+.budget-picker-item small { margin-left: auto; color: #7a8494; }
 .budget-rule-head h3 { margin: 0 0 10px; }
 .budget-rule-top { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .budget-rule-bottom { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }

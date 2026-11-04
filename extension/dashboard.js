@@ -1737,9 +1737,8 @@ function makeBudgetRule(index, onRemove) {
   const top = node('div', 'budget-rule-top');
   const product = node('section', 'budget-rule-column');
   product.append(node('h4', '', '商品設定'));
-  const pick = node('button', 'preview-delete-button', '添加商品');
-  pick.type = 'button'; pick.disabled = true;
-  pick.title = '商品選擇器尚未接入';
+  const pick = node('button', 'preview-delete-button budget-pick-items', '添加商品');
+  pick.type = 'button';
   product.append(pick);
   budgetRuleField(product, 'rule-item-ids', '商品 ID（支援多 ID）', {
     type: 'textarea', placeholder: '逗號、空格或換行均可',
@@ -1951,10 +1950,126 @@ function appendBudgetLayout(detail, feature) {
       applyBudgetRule(row, copied);
       renumber();
       row.querySelector('.rule-item-ids').focus();
+    } else if (event.target.closest('.budget-pick-items')) {
+      openProductPicker(event.target.closest('.budget-rule-row'));
     } else if (event.target.closest('.budget-add-roi-time, .budget-add-window, .budget-time-row button')) {
       saveDraft();
     }
   });
+  const picker = node('dialog', 'budget-picker-dialog');
+  picker.append(node('h3', '', '選擇在架商品'),
+    node('p', 'query-note', '此選擇器使用 Open Platform 商品列表；廣告狀態、ROI 類型與標題尚未接入。'));
+  const search = node('input', 'budget-picker-search');
+  search.type = 'search'; search.placeholder = '搜尋本頁商品 ID';
+  const pickerStatus = node('p', 'query-note');
+  const pickerList = node('div', 'budget-picker-list');
+  const pickerActions = node('div', 'budget-controls');
+  const selectPage = node('button', 'preview-delete-button', '全選本頁');
+  const invertPage = node('button', 'preview-delete-button', '反選本頁');
+  const previous = node('button', 'preview-delete-button', '上一頁');
+  const next = node('button', 'preview-delete-button', '下一頁');
+  const confirm = node('button', 'run-button', '加入這條規則');
+  const close = node('button', 'preview-delete-button', '關閉');
+  for (const button of [selectPage, invertPage, previous, next, confirm, close]) button.type = 'button';
+  pickerActions.append(selectPage, invertPage, previous, next, confirm, close);
+  picker.append(search, pickerStatus, pickerList, pickerActions);
+  form.append(picker);
+  let pickerRow = null;
+  let pickerPage = 0;
+  let pickerItems = [];
+  let pickerHasNext = false;
+  let pickerSelection = new Set();
+  let otherRuleIds = new Set();
+  let pickerRequest = 0;
+  const selectionStatus = node('p', 'query-note');
+  picker.insertBefore(selectionStatus, pickerActions);
+  const renderPicker = () => {
+    pickerList.replaceChildren();
+    const query = search.value.trim();
+    const items = pickerItems.filter(item => String(item.item_id).includes(query));
+    for (const item of items) {
+      const id = String(item.item_id);
+      const label = node('label', 'budget-picker-item');
+      const checkbox = node('input');
+      checkbox.type = 'checkbox'; checkbox.value = id;
+      checkbox.checked = pickerSelection.has(id);
+      checkbox.disabled = otherRuleIds.has(id);
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) pickerSelection.add(id);
+        else pickerSelection.delete(id);
+        selectionStatus.textContent = `已選 ${pickerSelection.size} 件。`;
+      });
+      label.append(checkbox, node('span', '', `商品 ID ${id} · ${item.item_status || '狀態未確認'}`),
+        ...(checkbox.disabled ? [node('small', '', '已在其他規則')] : []));
+      pickerList.append(label);
+    }
+    if (!items.length) pickerList.append(node('p', 'query-note', '本頁沒有符合搜尋的商品。'));
+    previous.disabled = pickerPage === 0;
+    next.disabled = !pickerHasNext;
+    selectionStatus.textContent = `已選 ${pickerSelection.size} 件。`;
+  };
+  const loadPickerPage = async () => {
+    const request = ++pickerRequest;
+    previous.disabled = next.disabled = true;
+    pickerStatus.textContent = `正在讀取第 ${pickerPage + 1} 頁…`;
+    try {
+      const result = await api(`/api/items?status=NORMAL&offset=${pickerPage * 100}&pageSize=100`);
+      if (request !== pickerRequest || !picker.open || !pickerRow?.isConnected) return;
+      pickerItems = result.item || [];
+      pickerHasNext = Boolean(result.has_next_page);
+      pickerStatus.textContent = `第 ${pickerPage + 1} 頁，${pickerItems.length} 件在架商品；搜尋只涵蓋目前頁面。`;
+      renderPicker();
+    } catch (error) {
+      if (request !== pickerRequest || !picker.open) return;
+      pickerStatus.textContent = error.message || String(error);
+      previous.disabled = pickerPage === 0;
+    }
+  };
+  const openProductPicker = row => {
+    try {
+      pickerSelection = parseItemIds(row.querySelector('.rule-item-ids').value);
+      otherRuleIds = new Set([...list.children].filter(item => item !== row)
+        .flatMap(item => [...parseItemIds(item.querySelector('.rule-item-ids').value)]));
+    } catch (error) {
+      row.querySelector('.rule-item-ids').setCustomValidity(error.message || String(error));
+      row.querySelector('.rule-item-ids').reportValidity();
+      row.querySelector('.rule-item-ids').setCustomValidity('');
+      return;
+    }
+    pickerRow = row; pickerPage = 0; pickerItems = []; pickerHasNext = false;
+    search.value = '';
+    picker.showModal();
+    void loadPickerPage();
+  };
+  search.addEventListener('input', renderPicker);
+  selectPage.addEventListener('click', () => {
+    for (const item of pickerItems) {
+      const id = String(item.item_id);
+      if (!otherRuleIds.has(id) && id.includes(search.value.trim())) pickerSelection.add(id);
+    }
+    renderPicker();
+  });
+  invertPage.addEventListener('click', () => {
+    for (const item of pickerItems) {
+      const id = String(item.item_id);
+      if (otherRuleIds.has(id) || !id.includes(search.value.trim())) continue;
+      if (pickerSelection.has(id)) pickerSelection.delete(id);
+      else pickerSelection.add(id);
+    }
+    renderPicker();
+  });
+  previous.addEventListener('click', () => { pickerPage--; void loadPickerPage(); });
+  next.addEventListener('click', () => { pickerPage++; void loadPickerPage(); });
+  confirm.addEventListener('click', () => {
+    if (pickerRow?.isConnected) {
+      const input = pickerRow.querySelector('.rule-item-ids');
+      input.value = [...pickerSelection].join('\n');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    picker.close();
+  });
+  close.addEventListener('click', () => picker.close());
+  picker.addEventListener('close', () => { pickerRequest++; pickerRow = null; });
   const controls = node('div', 'budget-controls');
   const add = node('button', 'run-button', '＋ 添加規則');
   add.type = 'button'; add.id = 'btn-add-rule';
