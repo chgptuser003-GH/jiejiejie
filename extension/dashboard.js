@@ -2029,6 +2029,227 @@ function appendShippingDaysLayout(detail, feature) {
   legacyStatus(detail, feature);
 }
 
+function shippingStatusRow(detail, feature) {
+  legacyStatus(detail, feature);
+}
+
+function appendShippingChannelsLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout shipping-single-layout');
+  form.append(node('h3', '', '🚚 物流設定'),
+    node('p', 'shipping-info', '選擇店鋪商品後，可批量開啟、關閉或調整物流渠道。此頁僅處理物流設定。'));
+  const open = node('button', 'run-button', '選擇商品並設定物流');
+  open.id = 'standaloneLogisticsBtn'; open.type = 'button';
+  form.append(open);
+  const picker = node('div', 'shipping-picker');
+  picker.id = 'logisticsProductModal'; picker.hidden = true;
+  picker.append(node('h4', '', '選擇商品'));
+  const ids = legacyControl('指定商品 ID（可選，逗號或換行分隔）', 'logisticsProductIds', {
+    kind: 'textarea', placeholder: '留空讀取前 100 件在架商品',
+  });
+  picker.append(ids.wrapper);
+  const query = node('button', 'preview-delete-button', '讀取商品');
+  query.type = 'button';
+  const output = node('div', 'output', '按「讀取商品」顯示本頁商品。');
+  const selected = node('div', 'query-summary', '已選 0 件商品');
+  selected.id = 'logisticsSelectedCount';
+  const settings = node('div', 'shipping-picker');
+  settings.id = 'logisticsSettingsModal'; settings.hidden = true;
+  settings.append(node('h4', '', '物流渠道設定'),
+    node('p', 'query-note', '尚未取得此店鋪的物流渠道與商品渠道狀態；不能列出可勾選渠道。'));
+  const apply = node('button', 'run-button', '套用物流設定');
+  apply.id = 'logisticsApplyBtn'; apply.type = 'button'; apply.disabled = true;
+  settings.append(apply);
+  const confirm = node('button', 'preview-delete-button', '確認選取');
+  confirm.id = 'logisticsConfirmSelectBtn'; confirm.type = 'button'; confirm.disabled = true;
+  confirm.addEventListener('click', () => { settings.hidden = false; });
+  let checkedIds = new Set();
+  query.addEventListener('click', async () => {
+    query.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在讀取前 100 件在架商品…';
+    try {
+      const wanted = parseItemIds(ids.control.value);
+      const result = await api('/api/items?status=NORMAL&pageSize=100');
+      const items = (result.item || []).filter(item => !wanted.size || wanted.has(String(item.item_id)));
+      checkedIds = new Set();
+      selected.textContent = '已選 0 件商品';
+      confirm.disabled = true;
+      output.replaceChildren();
+      for (const item of items) {
+        const label = node('label', 'shipping-item-option');
+        const checkbox = node('input');
+        checkbox.type = 'checkbox'; checkbox.value = String(item.item_id);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) checkedIds.add(checkbox.value);
+          else checkedIds.delete(checkbox.value);
+          selected.textContent = `已選 ${checkedIds.size} 件商品`;
+          confirm.disabled = checkedIds.size === 0;
+        });
+        label.append(checkbox, node('span', '', `商品 ${item.item_id} · ${item.item_status || '狀態未確認'}`));
+        output.append(label);
+      }
+      if (!items.length) output.textContent = result.has_next_page
+        ? '前 100 件沒有符合的商品；指定 ID 可能在後續頁面。'
+        : '在架商品列表中沒有符合的商品。';
+      output.append(node('p', 'query-note', result.has_next_page
+        ? '只讀取前 100 件在架商品，後續頁面尚未讀取。' : '已讀完在架商品列表。'));
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { query.disabled = false; }
+  });
+  picker.append(query, selected, output, confirm, settings);
+  open.addEventListener('click', () => { picker.hidden = !picker.hidden; });
+  form.append(picker);
+  detail.append(form);
+  shippingStatusRow(detail, feature);
+}
+
+function appendShippingStockLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout shipping-single-layout');
+  form.append(node('h3', '', '🔍 查詢較長備貨數量'));
+  const query = node('button', 'run-button', '一鍵查詢');
+  query.id = 'startStockQueryBtn'; query.type = 'button';
+  const copyActions = node('div', 'shipping-actions');
+  copyActions.id = 'stockQueryActions';
+  for (const [id, label] of [['copySpotIdsBtn', '複製現貨商品 ID'],
+    ['copyPreorderIdsBtn', '複製較長備貨商品 ID']]) {
+    const button = node('button', 'preview-delete-button', label);
+    button.id = id; button.type = 'button'; button.disabled = true;
+    copyActions.append(button);
+  }
+  const stats = node('div', 'shipping-stat-grid');
+  for (const [id, label] of [['stock-total-products', '本頁在架商品'],
+    ['stock-processed-products', '已辨識備貨'], ['stock-online-spot', '現貨'],
+    ['stock-online-preorder', '較長備貨']]) {
+    const tile = node('div', 'shipping-stat');
+    const number = node('strong', '', id === 'stock-total-products' ? '0' : '未確認');
+    number.id = id;
+    tile.append(number, node('span', '', label));
+    stats.append(tile);
+  }
+  const output = node('div', 'output', '商品列表可讀；備貨天數需商品詳情 API，尚未接入。');
+  query.addEventListener('click', async () => {
+    query.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在讀取前 100 件在架商品…';
+    try {
+      const result = await api('/api/items?status=NORMAL&pageSize=100');
+      const items = result.item || [];
+      stats.querySelector('#stock-total-products').textContent = String(items.length);
+      table(output, ['商品 ID', '狀態', '備貨天數'],
+        items.map(item => [item.item_id, item.item_status, '未確認']));
+      output.prepend(node('p', 'query-summary', result.has_next_page
+        ? '只讀取前 100 件；後續商品尚未掃描。' : '在架商品列表已讀完。'));
+      output.append(node('p', 'query-note', '未取得商品詳情，無法判定現貨或較長備貨，也不提供對應 ID 複製。'));
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { query.disabled = false; }
+  });
+  form.append(query, copyActions, stats, output);
+  detail.append(form);
+  shippingStatusRow(detail, feature);
+}
+
+function appendShippingNextLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout shipping-single-layout');
+  form.append(node('h3', '', '⚡ 全店改隔日到貨'));
+  const percent = legacyControl('隔日到貨開通比例 (%)', 'nextDayOpenPercent', {
+    kind: 'number', value: '55', min: '1', step: '1',
+    help: '原版目標數量 = 全店在售商品數 × 比例，向上取整。',
+  });
+  percent.control.max = '100';
+  form.append(percent.wrapper);
+  const actions = node('div', 'shipping-actions');
+  for (const [id, label] of [['startNextDayBtn', '按比例開通隔日到貨'],
+    ['modifyGiftWithNextDayBtn', '一鍵恢復']]) {
+    const button = node('button', 'run-button', label);
+    button.id = id; button.type = 'button'; button.disabled = true;
+    actions.append(button);
+  }
+  form.append(actions);
+  const info = node('div', 'shipping-info');
+  info.append(node('strong', '', '原版開通規則'),
+    node('p', '', '按全店在售商品計算目標數量，只從零銷量商品選取；入選後設 1 天備貨並啟用隔日到貨渠道。'),
+    node('p', '', '一鍵恢復會關閉本次開啟的渠道，並將入選商品設回 10 天備貨。'));
+  form.append(info);
+  const preview = node('button', 'preview-delete-button', '只讀預覽目標數量');
+  preview.type = 'button';
+  const output = node('div', 'output', '讀取在售商品數量後顯示計算結果。');
+  preview.addEventListener('click', async () => {
+    preview.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在讀取前 100 件在售商品…';
+    try {
+      const rate = Number(percent.control.value);
+      if (!Number.isInteger(rate) || rate < 1 || rate > 100) throw new Error('開通比例必須是 1–100 的整數。');
+      const result = await api('/api/items?status=NORMAL&pageSize=100');
+      const count = (result.item || []).length;
+      output.textContent = result.has_next_page
+        ? `已讀取前 ${count} 件在售商品，後面還有資料；全店目標數量尚無法確定。`
+        : `在售商品 ${count} 件，按 ${rate}% 計算目標 ${Math.ceil(count * rate / 100)} 件。零銷量資格及隔日到貨渠道尚未確認。`;
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { preview.disabled = false; }
+  });
+  form.append(preview, output);
+  detail.append(form);
+  shippingStatusRow(detail, feature);
+}
+
+function appendShippingGiftLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout shipping-single-layout');
+  form.append(node('h3', '', '🎁 滿額贈'));
+  const days = legacyControl('統一備貨天數', 'randomDaysToShip', {
+    kind: 'number', value: '7', min: '1', help: '原版建立活動前會統一候選主商品與贈品的備貨天數。',
+  });
+  days.control.max = '30';
+  const ids = legacyControl('贈品商品 ID', 'excludeGiftIds', {
+    kind: 'textarea', placeholder: '每行一個商品 ID，或以逗號分隔',
+    help: '贈品與候選主商品會設為相同備貨天數。',
+  });
+  form.append(days.wrapper, ids.wrapper);
+  const actions = node('div', 'shipping-actions');
+  for (const [id, label] of [['createAddOnDealBtn', '一鍵建立滿額贈活動'],
+    ['selectAddOnDealsForSkuBtn', '修改已有滿額贈']]) {
+    const button = node('button', 'run-button', label);
+    button.id = id; button.type = 'button'; button.disabled = true;
+    actions.append(button);
+  }
+  form.append(actions, node('p', 'query-note',
+    '需先確認贈品、主商品、SKU 與活動的 API 權限；建立和修改按鈕尚未啟用。'));
+  const check = node('button', 'preview-delete-button', '核對贈品商品 ID');
+  check.type = 'button';
+  const output = node('div', 'output', '輸入贈品商品 ID 後可在前 100 件在架商品中核對。');
+  check.addEventListener('click', async () => {
+    check.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在讀取商品…';
+    try {
+      const wanted = parseItemIds(ids.control.value, { required: true });
+      const count = Number(days.control.value);
+      if (!Number.isInteger(count) || count < 1 || count > 30) throw new Error('統一備貨天數必須是 1–30 的整數。');
+      const result = await api('/api/items?status=NORMAL&pageSize=100');
+      const found = (result.item || []).filter(item => wanted.has(String(item.item_id)));
+      table(output, ['贈品商品 ID', '狀態', '預定備貨天數'],
+        found.map(item => [item.item_id, item.item_status, count]));
+      output.prepend(node('p', 'query-summary',
+        `指定 ${wanted.size} 件，前 100 件在架商品中找到 ${found.length} 件。`));
+      if (found.length < wanted.size) output.append(node('p', 'query-note',
+        result.has_next_page ? '其餘 ID 可能在後續頁面。' : '其餘 ID 不在本次在架商品清單中。'));
+      output.append(node('p', 'query-note', '此處只核對商品 ID，不會修改備貨天數或建立活動。'));
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { check.disabled = false; }
+  });
+  form.append(check, output);
+  detail.append(form);
+  shippingStatusRow(detail, feature);
+}
+
 function renderFeature(feature) {
   activeFeature = feature;
   const detail = $('feature-detail');
@@ -2052,6 +2273,10 @@ function renderFeature(feature) {
     'products-title': appendTitleLayout,
     'budget-rules': appendBudgetLayout,
     'shipping-days': appendShippingDaysLayout,
+    'shipping-channels': appendShippingChannelsLayout,
+    'shipping-stock': appendShippingStockLayout,
+    'shipping-next': appendShippingNextLayout,
+    'shipping-gift': appendShippingGiftLayout,
   }[feature.id];
   if (legacyLayout) {
     legacyLayout(detail, feature);

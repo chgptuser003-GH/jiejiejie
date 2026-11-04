@@ -27,10 +27,10 @@ export const modules = [
   {
     id: 'shipping', name: '發貨與物流', icon: '🚚', features: [
       { id: 'shipping-days', name: '批量發貨天數', status: 'partial', summary: '設現貨 1 天或預售 3–15 天，依商品狀態、銷量和活動排除。', details: '已按原版建立模式、範圍、排除、物流聯動與雙排程欄位，可只讀預覽前 100 件上架／下架商品；銷量、特賣、滿額贈、備貨天數寫入和定時任務仍未接入。' },
-      { id: 'shipping-channels', name: '物流渠道設定', status: 'mapping', summary: '批量開關或調整商品的物流渠道。', details: '需確認 Logistics 與 Product API 的商品物流設定能力。' },
-      { id: 'shipping-stock', name: '現貨預售查詢', status: 'mapping', summary: '統計發貨天數並複製現貨／預售商品 ID。', details: '需要商品詳情與 SKU 層級發貨天數查詢。' },
-      { id: 'shipping-next', name: '全店改隔日到貨', status: 'mapping', summary: '按比例選零銷量商品，改 1 天並啟用隔日到貨；支援恢復。', details: '需確認臺灣站隔日到貨渠道、資格條件和可逆變更方式。' },
-      { id: 'shipping-gift', name: '贈品與 SKU 聯動', status: 'mapping', summary: '同步主商品與贈品的發貨天數和物流設定。', details: '需對照活動商品關聯、SKU 更新與物流 API。' },
+      { id: 'shipping-channels', name: '物流渠道設定', status: 'partial', summary: '批量開關或調整商品的物流渠道。', details: '可讀取前 100 件在架商品並選取 ID；店鋪可用渠道、商品渠道狀態與寫入端點尚未確認，因此套用按鈕停用。' },
+      { id: 'shipping-stock', name: '現貨預售查詢', status: 'partial', summary: '統計發貨天數並複製現貨／預售商品 ID。', details: '可讀取前 100 件在架商品；商品詳情與 SKU 備貨天數未接入，故不計算現貨／預售數量，也不提供 ID 複製。' },
+      { id: 'shipping-next', name: '全店改隔日到貨', status: 'partial', summary: '按比例選零銷量商品，改 1 天並啟用隔日到貨；支援恢復。', details: '商品清單完整時可只讀計算比例目標；銷量、隔日到貨渠道、資格與恢復快照尚未接入，寫入停用。' },
+      { id: 'shipping-gift', name: '贈品與 SKU 聯動', status: 'partial', summary: '同步主商品與贈品的發貨天數和物流設定。', details: '可在前 100 件在架商品中核對贈品 ID；主商品、活動關聯、SKU 更新、物流和建立活動仍需官方端點。' },
     ],
   },
   {

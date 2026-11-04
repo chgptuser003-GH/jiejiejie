@@ -196,3 +196,17 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .shipping-automation { display: grid; gap: 10px; margin: 14px 0; padding: 15px; border: 1px solid #dce3ec; border-radius: 8px; background: #f9fafc; }
 .shipping-automation .run-button { width: max-content; }
 @media (max-width: 1200px) { .shipping-days-layout .shipping-choice-grid.scope-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.shipping-single-layout { max-width: 1000px; }
+.shipping-single-layout > .run-button, .shipping-single-layout > .preview-delete-button { margin: 10px 0; }
+.shipping-info { padding: 15px 18px; margin: 10px 0 18px; border: 1px solid #fed7aa; border-radius: 9px; background: #fff7ed; color: #475569; line-height: 1.6; font-size: 12px; }
+.shipping-info p { margin: 8px 0 0; }
+.shipping-picker { padding: 14px; margin: 15px 0; border: 1px solid #dce3ec; border-radius: 8px; background: #f9fafc; }
+.shipping-picker .output { max-height: 300px; }
+.shipping-picker .preview-delete-button { margin: 8px 8px 8px 0; }
+.shipping-item-option { display: flex; align-items: center; gap: 9px; padding: 7px 4px; border-bottom: 1px solid #e8edf2; font-size: 12px; }
+.shipping-item-option input { accent-color: #ee4d2d; }
+.shipping-stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+.shipping-stat { padding: 14px 8px; border: 1px solid #e3e8ef; border-radius: 8px; background: #fff; text-align: center; }
+.shipping-stat strong, .shipping-stat span { display: block; }.shipping-stat strong { color: #ee4d2d; font-size: 18px; }
+.shipping-stat span { color: #65748a; font-size: 11px; }
+@media (max-width: 1000px) { .shipping-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
