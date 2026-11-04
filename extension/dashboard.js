@@ -1957,10 +1957,20 @@ function appendBudgetLayout(detail, feature) {
     }
   });
   const picker = node('dialog', 'budget-picker-dialog');
-  picker.append(node('h3', '', '選擇在架商品'),
-    node('p', 'query-note', '此選擇器使用 Open Platform 商品列表；廣告狀態、ROI 類型與標題尚未接入。'));
+  picker.append(node('h3', '', '選擇進行中的廣告商品'),
+    node('p', 'query-note', '使用 Open Platform 活動設定對照在架商品；ROI 類型、日期、標題和績效排序尚未接入。'));
+  const adFilter = node('select', 'budget-picker-filter');
+  for (const [value, label] of [
+    ['advertised', '進行中的廣告商品'], ['all', '全部在架商品'],
+    ['unadvertised', '未出現在進行中廣告'],
+  ]) {
+    const option = node('option', '', label);
+    option.value = value;
+    adFilter.append(option);
+  }
   const search = node('input', 'budget-picker-search');
   search.type = 'search'; search.placeholder = '搜尋本頁商品 ID';
+  const adStatus = node('p', 'query-note');
   const pickerStatus = node('p', 'query-note');
   const pickerList = node('div', 'budget-picker-list');
   const pickerActions = node('div', 'budget-controls');
@@ -1972,7 +1982,7 @@ function appendBudgetLayout(detail, feature) {
   const close = node('button', 'preview-delete-button', '關閉');
   for (const button of [selectPage, invertPage, previous, next, confirm, close]) button.type = 'button';
   pickerActions.append(selectPage, invertPage, previous, next, confirm, close);
-  picker.append(search, pickerStatus, pickerList, pickerActions);
+  picker.append(adFilter, search, adStatus, pickerStatus, pickerList, pickerActions);
   form.append(picker);
   let pickerRow = null;
   let pickerPage = 0;
@@ -1981,12 +1991,26 @@ function appendBudgetLayout(detail, feature) {
   let pickerSelection = new Set();
   let otherRuleIds = new Set();
   let pickerRequest = 0;
+  let pickerSession = 0;
+  let advertisedIds = new Set();
+  let campaignScanComplete = false;
+  let campaignScanReady = false;
   const selectionStatus = node('p', 'query-note');
   picker.insertBefore(selectionStatus, pickerActions);
+  const visiblePickerItems = () => {
+    const query = search.value.trim();
+    if (adFilter.value !== 'all' && !campaignScanReady) return [];
+    if (adFilter.value === 'unadvertised' && !campaignScanComplete) return [];
+    return pickerItems.filter(item => {
+      const id = String(item.item_id);
+      return id.includes(query) && (adFilter.value === 'all'
+        || (adFilter.value === 'advertised' && advertisedIds.has(id))
+        || (adFilter.value === 'unadvertised' && !advertisedIds.has(id)));
+    });
+  };
   const renderPicker = () => {
     pickerList.replaceChildren();
-    const query = search.value.trim();
-    const items = pickerItems.filter(item => String(item.item_id).includes(query));
+    const items = visiblePickerItems();
     for (const item of items) {
       const id = String(item.item_id);
       const label = node('label', 'budget-picker-item');
@@ -1999,11 +2023,16 @@ function appendBudgetLayout(detail, feature) {
         else pickerSelection.delete(id);
         selectionStatus.textContent = `已選 ${pickerSelection.size} 件。`;
       });
-      label.append(checkbox, node('span', '', `商品 ID ${id} · ${item.item_status || '狀態未確認'}`),
+      label.append(checkbox, node('span', '', `商品 ID ${id} · ${item.item_status || '狀態未確認'} · ${advertisedIds.has(id) ? '進行中廣告' : campaignScanComplete ? '未出現在進行中廣告' : '廣告狀態未確認'}`),
         ...(checkbox.disabled ? [node('small', '', '已在其他規則')] : []));
       pickerList.append(label);
     }
-    if (!items.length) pickerList.append(node('p', 'query-note', '本頁沒有符合搜尋的商品。'));
+    if (!items.length) pickerList.append(node('p', 'query-note',
+      adFilter.value !== 'all' && !campaignScanReady
+        ? '正在核對廣告活動，完成前不能按廣告條件選品。'
+        : adFilter.value === 'unadvertised' && !campaignScanComplete
+        ? '廣告活動尚未掃描完整，無法確認未投放商品。'
+        : '本頁沒有符合篩選的商品。'));
     previous.disabled = pickerPage === 0;
     next.disabled = !pickerHasNext;
     selectionStatus.textContent = `已選 ${pickerSelection.size} 件。`;
@@ -2017,12 +2046,49 @@ function appendBudgetLayout(detail, feature) {
       if (request !== pickerRequest || !picker.open || !pickerRow?.isConnected) return;
       pickerItems = result.item || [];
       pickerHasNext = Boolean(result.has_next_page);
-      pickerStatus.textContent = `第 ${pickerPage + 1} 頁，${pickerItems.length} 件在架商品；搜尋只涵蓋目前頁面。`;
+      pickerStatus.textContent = `第 ${pickerPage + 1} 頁，${pickerItems.length} 件在架商品；搜尋和篩選只涵蓋目前頁面。`;
       renderPicker();
     } catch (error) {
       if (request !== pickerRequest || !picker.open) return;
       pickerStatus.textContent = error.message || String(error);
       previous.disabled = pickerPage === 0;
+    }
+  };
+  const preparePicker = async session => {
+    adStatus.textContent = '正在核對進行中的廣告活動…';
+    try {
+      const nextIds = new Set();
+      const scanned = await scanCampaignPages({
+        maxPages: 10, pageSize: 100,
+        fetchPage: ({ offset, limit }) => api(`/api/ads?limit=${limit}&offset=${offset}`),
+        onPage: async campaigns => {
+          if (!campaigns.length) return;
+          const joined = encodeURIComponent(campaigns.map(item => item.campaign_id).join(','));
+          const settings = await api(`/api/ads/settings?ids=${joined}`);
+          const byId = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
+          if (byId.size !== campaigns.length) throw new Error('部分廣告設定未回傳，不能可靠篩選商品。');
+          for (const campaign of campaigns) {
+            const info = byId.get(String(campaign.campaign_id))?.common_info;
+            if (info?.campaign_status !== 'ongoing') continue;
+            for (const id of Array.isArray(info.item_id_list) ? info.item_id_list : []) {
+              nextIds.add(String(id));
+            }
+          }
+        },
+      });
+      if (session !== pickerSession || !picker.open || !pickerRow?.isConnected) return;
+      advertisedIds = nextIds;
+      campaignScanComplete = scanned.complete;
+      campaignScanReady = true;
+      adStatus.textContent = `已核對 ${scanned.scanned} 個活動、${nextIds.size} 個進行中廣告商品${scanned.complete ? '；活動已掃描完整。' : '；達到 1000 個活動上限，未投放判定不可用。'}`;
+      await loadPickerPage();
+    } catch (error) {
+      if (session !== pickerSession || !picker.open) return;
+      campaignScanReady = false;
+      advertisedIds = new Set();
+      adStatus.textContent = `廣告對照失敗：${error.message || String(error)}。目前不能用廣告條件選品。`;
+      adFilter.value = 'all';
+      await loadPickerPage();
     }
   };
   const openProductPicker = row => {
@@ -2037,22 +2103,27 @@ function appendBudgetLayout(detail, feature) {
       return;
     }
     pickerRow = row; pickerPage = 0; pickerItems = []; pickerHasNext = false;
+    campaignScanReady = false; campaignScanComplete = false; advertisedIds = new Set();
+    adFilter.value = 'advertised';
     search.value = '';
+    pickerStatus.textContent = '';
+    pickerList.replaceChildren();
     picker.showModal();
-    void loadPickerPage();
+    void preparePicker(++pickerSession);
   };
   search.addEventListener('input', renderPicker);
+  adFilter.addEventListener('change', renderPicker);
   selectPage.addEventListener('click', () => {
-    for (const item of pickerItems) {
+    for (const item of visiblePickerItems()) {
       const id = String(item.item_id);
-      if (!otherRuleIds.has(id) && id.includes(search.value.trim())) pickerSelection.add(id);
+      if (!otherRuleIds.has(id)) pickerSelection.add(id);
     }
     renderPicker();
   });
   invertPage.addEventListener('click', () => {
-    for (const item of pickerItems) {
+    for (const item of visiblePickerItems()) {
       const id = String(item.item_id);
-      if (otherRuleIds.has(id) || !id.includes(search.value.trim())) continue;
+      if (otherRuleIds.has(id)) continue;
       if (pickerSelection.has(id)) pickerSelection.delete(id);
       else pickerSelection.add(id);
     }
@@ -2069,7 +2140,7 @@ function appendBudgetLayout(detail, feature) {
     picker.close();
   });
   close.addEventListener('click', () => picker.close());
-  picker.addEventListener('close', () => { pickerRequest++; pickerRow = null; });
+  picker.addEventListener('close', () => { pickerRequest++; pickerSession++; pickerRow = null; });
   const controls = node('div', 'budget-controls');
   const add = node('button', 'run-button', '＋ 添加規則');
   add.type = 'button'; add.id = 'btn-add-rule';

@@ -15,7 +15,7 @@ export const modules = [
   },
   {
     id: 'budget', name: '預算水位線', icon: '📈', features: [
-      { id: 'budget-rules', name: '預算追加與定時控制', status: 'partial', summary: '依剩餘預算、CPC、ROAS 和上限判斷追加；可設時間窗、日終重置與隔日恢復。', details: '已按原版建立多規則、複製規則、瀏覽器本機草稿保存、在架商品分頁選擇、時間窗與次日恢復的表單聯動，可將單條規則的數值門檻套用到本機樣本預覽；商品選擇尚未按廣告狀態和 ROI 篩選，持久任務、後端排程、廣告讀寫及 23:55 重置尚未接入。', tool: 'budget-preview' },
+      { id: 'budget-rules', name: '預算追加與定時控制', status: 'partial', summary: '依剩餘預算、CPC、ROAS 和上限判斷追加；可設時間窗、日終重置與隔日恢復。', details: '已按原版建立多規則、複製規則、瀏覽器本機草稿保存、在架商品分頁選擇與進行中廣告對照、時間窗與次日恢復的表單聯動，可將單條規則的數值門檻套用到本機樣本預覽；商品選擇尚未按 ROI 類型、日期、標題和績效排序，持久任務、後端排程、廣告讀寫及 23:55 重置尚未接入。', tool: 'budget-preview' },
     ],
   },
   {
