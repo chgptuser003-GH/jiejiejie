@@ -2250,6 +2250,160 @@ function appendShippingGiftLayout(detail, feature) {
   shippingStatusRow(detail, feature);
 }
 
+function appendMarketingScopePreview(form, mode, ids) {
+  const button = node('button', 'preview-delete-button', '只讀預覽商品範圍');
+  button.type = 'button';
+  const output = node('div', 'output', '選擇商品範圍後可核對前 100 件在架商品。');
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在讀取前 100 件在架商品…';
+    try {
+      const manual = mode.control.value === 'manual';
+      const wanted = manual ? parseItemIds(ids.control.value, { required: true }) : new Set();
+      const result = await api('/api/items?status=NORMAL&pageSize=100');
+      const items = (result.item || []).filter(item => !manual || wanted.has(String(item.item_id)));
+      table(output, ['商品 ID', '狀態'], items.map(item => [item.item_id, item.item_status]));
+      output.prepend(node('p', 'query-summary', manual
+        ? `指定 ${wanted.size} 件；本頁找到 ${items.length} 件。`
+        : `本頁在架商品 ${items.length} 件。`));
+      output.append(node('p', 'query-note', result.has_next_page
+        ? '後面還有商品，尚未讀完；未找到的指定 ID 也可能在後續頁面。'
+        : '在架商品列表已讀完。'));
+      output.append(node('p', 'query-note', '只核對商品 ID 和狀態；未查活動衝突、商品資格或折扣規則。'));
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { button.disabled = false; }
+  });
+  form.append(button, output);
+}
+
+function appendMarketingBundleLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout marketing-layout');
+  form.id = 'bundle-panel';
+  form.append(node('h3', '', '📦 批量開促銷組合'),
+    node('p', 'group-intro', '按滿件減金額規則建立組合，加入符合條件的商品。'));
+  const grid = node('div', 'marketing-form-grid');
+  const mode = legacyControl('商品範圍', 'bundle-mode', { kind: 'select', options: [
+    ['api', '全店在售商品'], ['manual', '手動輸入商品 ID'],
+  ] });
+  const minimum = legacyControl('滿件數', 'bundle-min', { kind: 'number', value: '5', min: '1' });
+  minimum.control.max = '999';
+  const discount = legacyControl('減免金額 (TWD)', 'bundle-value', {
+    kind: 'number', value: '5', min: '0', step: '0.01',
+  });
+  const limit = legacyControl('單買家購買限制', 'bundle-limit', { kind: 'number', value: '1', min: '1' });
+  limit.control.max = '9999';
+  const ids = legacyControl('商品 ID（一行一個）', 'bundle-ids', {
+    kind: 'textarea', placeholder: '每行一個或以逗號分隔',
+  });
+  ids.wrapper.id = 'bundle-manual-wrap'; ids.wrapper.classList.add('wide-field');
+  ids.wrapper.hidden = true;
+  mode.control.addEventListener('change', () => { ids.wrapper.hidden = mode.control.value !== 'manual'; });
+  grid.append(mode.wrapper, minimum.wrapper, discount.wrapper, limit.wrapper, ids.wrapper);
+  form.append(grid, node('p', 'shipping-info',
+    '原版約在提交後 10 分鐘開始、持續 180 天；目前尚未確認官方活動時間和商品資格規則。'));
+  const start = node('button', 'task-primary-btn marketing-submit', '開始批量建立');
+  start.id = 'start-bundle'; start.type = 'button'; start.disabled = true;
+  form.append(start);
+  appendMarketingScopePreview(form, mode, ids);
+  detail.append(form);
+  legacyStatus(detail, feature);
+}
+
+function appendMarketingDiscountLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout marketing-layout');
+  form.id = 'discount-panel';
+  form.append(node('h3', '', '％ 批量開折扣活動'),
+    node('p', 'group-intro', '按指定折數建立活動，排除有衝突或不符合條件的商品。'));
+  const grid = node('div', 'marketing-form-grid');
+  const mode = legacyControl('商品範圍', 'discount-mode', { kind: 'select', options: [
+    ['api', '全店在售商品'], ['manual', '手動輸入商品 ID'],
+  ] });
+  const fold = legacyControl('折扣（折）', 'discount-fold', {
+    kind: 'number', value: '9', min: '1', step: '0.1',
+  });
+  fold.control.max = '9.9';
+  const ids = legacyControl('商品 ID（一行一個）', 'discount-ids', {
+    kind: 'textarea', placeholder: '每行一個或以逗號分隔',
+  });
+  ids.wrapper.id = 'discount-manual-wrap'; ids.wrapper.classList.add('wide-field');
+  ids.wrapper.hidden = true;
+  mode.control.addEventListener('change', () => { ids.wrapper.hidden = mode.control.value !== 'manual'; });
+  grid.append(mode.wrapper, fold.wrapper, ids.wrapper);
+  form.append(grid, node('p', 'shipping-info',
+    '原版約在提交後 10 分鐘開始、持續 180 天，並核對活動衝突及商品標籤；這些檢查尚未接入。'));
+  const start = node('button', 'task-primary-btn marketing-submit', '開始批量建立');
+  start.id = 'start-discount'; start.type = 'button'; start.disabled = true;
+  form.append(start);
+  appendMarketingScopePreview(form, mode, ids);
+  detail.append(form);
+  legacyStatus(detail, feature);
+}
+
+function appendMarketingGiftLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout marketing-layout');
+  form.id = 'addon-panel';
+  form.append(node('h3', '', '🎁 滿額贈'),
+    node('p', 'group-intro', '統一候選商品備貨天數後建立活動，或修改已有活動商品的備貨天數。'));
+  const grid = node('div', 'marketing-form-grid');
+  const days = legacyControl('統一備貨天數', 'addon-days', { kind: 'number', value: '7', min: '1' });
+  days.control.max = '30';
+  const ids = legacyControl('贈品商品 ID', 'addon-gift-ids', {
+    kind: 'textarea', placeholder: '每行一個商品 ID，也可用逗號分隔',
+  });
+  ids.wrapper.classList.add('wide-field');
+  grid.append(days.wrapper, ids.wrapper);
+  form.append(grid, node('p', 'shipping-info',
+    '原版會先統一主商品與贈品備貨天數並讀回核對，失敗或不一致的商品不會加入活動。'));
+  const actions = node('div', 'shipping-actions');
+  for (const [id, label] of [['start-addon', '一鍵建立滿額贈活動'],
+    ['load-addon-deals', '修改已有滿額贈']]) {
+    const button = node('button', 'run-button', label);
+    button.id = id; button.type = 'button'; button.disabled = true;
+    actions.append(button);
+  }
+  form.append(actions);
+  const deals = node('div', 'shipping-picker');
+  deals.id = 'addon-deals-box'; deals.hidden = true;
+  deals.append(node('h4', '', '選擇已有活動'));
+  const summary = node('span', '', '尚未接入活動列表 API');
+  summary.id = 'addon-deals-summary';
+  const list = node('div'); list.id = 'addon-deals-list';
+  const update = node('button', 'run-button', '修改選中活動商品天數');
+  update.id = 'update-addon-days'; update.type = 'button'; update.disabled = true;
+  deals.append(summary, list, update);
+  form.append(deals);
+  const check = node('button', 'preview-delete-button', '只讀核對贈品 ID');
+  check.type = 'button';
+  const output = node('div', 'output', '輸入贈品 ID 後可核對前 100 件在架商品。');
+  check.addEventListener('click', async () => {
+    check.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在讀取商品…';
+    try {
+      const wanted = parseItemIds(ids.control.value, { required: true });
+      const count = Number(days.control.value);
+      if (!Number.isInteger(count) || count < 1 || count > 30) throw new Error('備貨天數必須是 1–30 的整數。');
+      const result = await api('/api/items?status=NORMAL&pageSize=100');
+      const found = (result.item || []).filter(item => wanted.has(String(item.item_id)));
+      table(output, ['贈品商品 ID', '狀態', '預定備貨天數'],
+        found.map(item => [item.item_id, item.item_status, count]));
+      output.prepend(node('p', 'query-summary', `指定 ${wanted.size} 件，本頁找到 ${found.length} 件。`));
+      output.append(node('p', 'query-note', result.has_next_page
+        ? '尚有後續商品；本頁未找到的 ID 仍未確認。' : '在架商品列表已讀完。'));
+      output.append(node('p', 'query-note', '只核對贈品 ID；主商品、SKU、活動與備貨天數沒有修改。'));
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { check.disabled = false; }
+  });
+  form.append(check, output);
+  detail.append(form);
+  legacyStatus(detail, feature);
+}
+
 function renderFeature(feature) {
   activeFeature = feature;
   const detail = $('feature-detail');
@@ -2277,6 +2431,9 @@ function renderFeature(feature) {
     'shipping-stock': appendShippingStockLayout,
     'shipping-next': appendShippingNextLayout,
     'shipping-gift': appendShippingGiftLayout,
+    'marketing-bundle': appendMarketingBundleLayout,
+    'marketing-discount': appendMarketingDiscountLayout,
+    'marketing-gift': appendMarketingGiftLayout,
   }[feature.id];
   if (legacyLayout) {
     legacyLayout(detail, feature);

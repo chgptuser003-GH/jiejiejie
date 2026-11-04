@@ -35,9 +35,9 @@ export const modules = [
   },
   {
     id: 'marketing', name: '行銷活動', icon: '🎁', features: [
-      { id: 'marketing-bundle', name: '組合促銷', status: 'mapping', summary: '指定商品、購買數、折扣額及每人限購後建立組合活動。', details: '需對照 Bundle Deal API 的商品資格、折扣與活動日期限制。' },
-      { id: 'marketing-discount', name: '折扣活動', status: 'mapping', summary: '為在架商品批量建立折扣並檢查活動衝突。', details: '需對照 Discount API 與臺灣站促銷規則。' },
-      { id: 'marketing-gift', name: '滿額贈／加購贈', status: 'mapping', summary: '統一發貨天數，建立或更新主商品和贈品活動。', details: '需對照 Add-On Deal、Product 與物流 API。' },
+      { id: 'marketing-bundle', name: '組合促銷', status: 'partial', summary: '指定商品、購買數、折扣額及每人限購後建立組合活動。', details: '已按原版建立欄位及商品範圍切換，可只讀核對前 100 件在架商品；Bundle Deal 資格、活動日期及建立端點尚未驗證。' },
+      { id: 'marketing-discount', name: '折扣活動', status: 'partial', summary: '為在架商品批量建立折扣並檢查活動衝突。', details: '已按原版建立欄位及商品範圍切換，可只讀核對前 100 件在架商品；折扣規則、活動衝突與建立端點尚未驗證。' },
+      { id: 'marketing-gift', name: '滿額贈／加購贈', status: 'partial', summary: '統一發貨天數，建立或更新主商品和贈品活動。', details: '可只讀核對前 100 件在架商品中的贈品 ID；活動列表、主商品、SKU、備貨天數和建立／更新端點尚未驗證。' },
     ],
   },
   {

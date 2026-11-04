@@ -210,3 +210,11 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .shipping-stat strong, .shipping-stat span { display: block; }.shipping-stat strong { color: #ee4d2d; font-size: 18px; }
 .shipping-stat span { color: #65748a; font-size: 11px; }
 @media (max-width: 1000px) { .shipping-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.marketing-layout { max-width: 1050px; }
+.marketing-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 13px; margin-top: 14px; }
+.marketing-form-grid .wide-field { grid-column: 1 / -1; }
+.marketing-layout .marketing-submit { width: auto; min-width: 145px; padding: 8px 18px; margin: 12px 0; }
+.marketing-layout > .preview-delete-button { margin: 10px 0; }
+.marketing-layout .shipping-picker { margin-top: 12px; }
+.shipping-automation[hidden], .shipping-picker[hidden] { display: none; }
+@media (max-width: 850px) { .marketing-form-grid { grid-template-columns: 1fr; } }
