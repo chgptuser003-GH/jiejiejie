@@ -56,3 +56,15 @@ export function selectBudgetCampaigns(campaigns, ids, mode, complete) {
   }
   return { candidates, missingIds: mode === 'include' ? [...ids].filter(id => !matchedIds.has(id)) : [] };
 }
+
+export function selectRoasCampaigns(campaigns, ids, mode, complete) {
+  const selection = selectBudgetCampaigns(campaigns, ids, mode, complete);
+  const settingsById = new Map(campaigns.map(item => [String(item.campaign_id), item]));
+  for (const candidate of selection.candidates) {
+    const biddingMethod = settingsById.get(candidate.campaignId)?.common_info?.bidding_method;
+    if (biddingMethod !== 'manual') {
+      throw new Error(`活動 ${candidate.campaignId} 的競價方式為 ${biddingMethod || '未知'}，不能按此方式批量修改目標 ROAS。`);
+    }
+  }
+  return selection;
+}

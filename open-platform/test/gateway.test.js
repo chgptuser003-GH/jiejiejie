@@ -6,6 +6,7 @@ import { ShopeeApiError } from '../src/client.js';
 test('local gateway requires pairing, routes read-only calls, and validates OAuth state', async () => {
   const calls = [];
   const editCalls = [];
+  let biddingMethod = 'auto';
   const server = createGatewayServer({
     shopId: '228006723', pairToken: 'pair-test', redirectUrl: 'https://example.test/callback',
     oauth: { authorizationUrl: redirect => new URL(`https://shopee.test/auth?redirect=${encodeURIComponent(redirect)}`) },
@@ -20,7 +21,7 @@ test('local gateway requires pairing, routes read-only calls, and validates OAut
       },
       getCampaignSettings: async () => ({ campaign_list: [{ campaign_id: 321,
         common_info: { ad_type: 'manual', campaign_status: 'ongoing', campaign_budget: 85,
-          bidding_method: 'auto' },
+          bidding_method: biddingMethod },
         auto_bidding_info: { roas_target: 0 } }] }),
       editManualProductAd: async (_id, values) => { editCalls.push(values); return { campaign_id: 321 }; },
     },
@@ -76,6 +77,14 @@ test('local gateway requires pairing, routes read-only calls, and validates OAut
     assert.equal(unsupportedRoas.status, 400);
     assert.equal((await unsupportedRoas.json()).error, 'roas_target_unsupported_for_auto_bidding');
     assert.equal(editCalls.length, 1);
+    biddingMethod = 'manual';
+    const manualRoas = await editRequest({ shopId: '228006723', confirm: 'EDIT_SANDBOX_MANUAL_AD',
+      campaignId: 321, action: 'change_roas_target', roasTarget: 3,
+      expectedStatus: 'ongoing', expectedBudget: 85, expectedRoasTarget: 0,
+      referenceId: 'edit-roas-1' });
+    assert.equal(manualRoas.status, 200);
+    assert.deepEqual(editCalls[1], { campaignId: 321, action: 'change_roas_target',
+      budget: undefined, roasTarget: 3, referenceId: 'edit-roas-1' });
     const invalidResume = await editRequest({ shopId: '228006723', confirm: 'EDIT_SANDBOX_MANUAL_AD',
       campaignId: 321, action: 'resume', expectedStatus: 'ongoing',
       expectedBudget: 85, expectedRoasTarget: 0 });

@@ -2,7 +2,7 @@ import { modules, statuses } from './feature-catalog.js';
 import { calculateProfit, DEFAULT_CALCULATOR_SETTINGS } from './calculator.js';
 import { evaluateBudgetTopup } from './budget-rule.js';
 import { scanCampaignPages } from './campaign-scan.js';
-import { parseItemIds, selectBudgetCampaigns, selectDeletionCandidates } from './campaign-selection.js';
+import { parseItemIds, selectBudgetCampaigns, selectDeletionCandidates, selectRoasCampaigns } from './campaign-selection.js';
 import { dateRangeFromPreset, matchesCampaignMetrics, matchesMetricConditions, summarizeDailyMetrics } from './ad-filter.js';
 import { classifyCampaignHealth } from './ad-health.js';
 
@@ -401,18 +401,20 @@ function appendManualEditTool(container) {
   container.append(panel);
 }
 
-function appendBatchBudgetTool(container) {
-  const { panel, fields, output } = toolPanel('沙盒批量修改每日預算',
-    '輸入最多 10 個手動選品活動 ID。先預覽目前預算，再逐個修改、逐個讀回；出錯即停止。執行期間請保持控制台開啟。');
-  const idsInput = field(fields, '活動 ID（逗號或空格分隔）', 'batch-budget-ids', { type: 'text' });
-  const budgetInput = field(fields, '新的每日預算 TWD', 'batch-budget-value', { value: '85', min: '1', step: '0.01' });
+function appendBatchValueTool(container, kind) {
+  const isRoas = kind === 'roas';
+  const label = isRoas ? '目標 ROAS' : '每日預算 TWD';
+  const { panel, fields, output } = toolPanel(`沙盒批量修改${label}`,
+    `輸入最多 10 個進行中的手動選品活動 ID。先預覽目前${label}，再逐個修改、逐個讀回；出錯即停止。執行期間請保持控制台開啟。${isRoas ? '僅支援 manual 競價的正數目標；系統 ROI 切換與加速推廣尚未接通。' : ''}`);
+  const idsInput = field(fields, '活動 ID（逗號或空格分隔）', `batch-${kind}-ids`, { type: 'text' });
+  const budgetInput = field(fields, `新的${label}`, `batch-${kind}-value`, { value: isRoas ? '3' : '85', min: isRoas ? '0.01' : '1', step: '0.01' });
   const previewButton = node('button', 'run-button', '預覽批量修改');
   const executeButton = node('button', 'run-button', '確認批量修改');
   const stopButton = node('button', 'run-button', '完成目前活動後停止');
   const logButton = node('button', 'run-button', '查看上次執行記錄');
   for (const button of [previewButton, executeButton, stopButton, logButton]) button.type = 'button';
-  previewButton.id = 'batch-budget-preview';
-  executeButton.id = 'batch-budget-execute';
+  previewButton.id = `batch-${kind}-preview`;
+  executeButton.id = `batch-${kind}-execute`;
   executeButton.disabled = true;
   stopButton.disabled = true;
   const actions = node('div', 'tool-actions');
@@ -440,9 +442,9 @@ function appendBatchBudgetTool(container) {
       if (!ids.length || ids.length > 10 || ids.some(id => !/^\d+$/.test(id) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0)) {
         throw new Error('請輸入 1–10 個有效的數字活動 ID。');
       }
-      const targetBudget = Number(budgetInput.value);
-      if (budgetInput.value.trim() === '' || !Number.isFinite(targetBudget) || targetBudget <= 0) {
-        throw new Error('新預算必須大於 0。');
+      const targetValue = Number(budgetInput.value);
+      if (budgetInput.value.trim() === '' || !Number.isFinite(targetValue) || targetValue <= 0) {
+        throw new Error(`新的${label}必須大於 0。`);
       }
       const healthResponse = await fetch(`${BASE}/health`);
       if (!healthResponse.ok) throw new Error('本機後端未就緒。');
@@ -462,26 +464,34 @@ function appendBatchBudgetTool(container) {
         if (!info || info.ad_type !== 'manual' || info.campaign_status !== 'ongoing') {
           throw new Error(`活動 ${id} 不存在，或不是進行中的手動選品廣告。`);
         }
-        const currentBudget = Number(info.campaign_budget);
-        if (!Number.isFinite(currentBudget) || currentBudget <= 0) {
-          throw new Error(`活動 ${id} 的目前預算無法確認。`);
+        if (isRoas && info.bidding_method !== 'manual') {
+          throw new Error(`活動 ${id} 不是 manual 競價，不能按此方式修改目標 ROAS。`);
         }
-        rows.push([id, info.ad_name, currentBudget, targetBudget,
-          currentBudget === targetBudget ? '無需修改' : '等待確認']);
-        if (currentBudget !== targetBudget) requests.push({
+        const currentBudget = Number(info.campaign_budget);
+        const currentRoas = Number(campaign.auto_bidding_info?.roas_target ?? (isRoas ? NaN : 0));
+        const currentValue = isRoas ? currentRoas : currentBudget;
+        if (!Number.isFinite(currentBudget) || currentBudget <= 0
+          || !Number.isFinite(currentRoas) || currentRoas < 0
+          || !Number.isFinite(currentValue)) {
+          throw new Error(`活動 ${id} 的目前設定無法確認。`);
+        }
+        rows.push([id, info.ad_name, currentValue, targetValue,
+          currentValue === targetValue ? '無需修改' : '等待確認']);
+        if (currentValue !== targetValue) requests.push({
           shopId: String(health.shopId), confirm: 'EDIT_SANDBOX_MANUAL_AD',
-          campaignId: Number(id), action: 'change_budget', budget: targetBudget,
+          campaignId: Number(id), action: isRoas ? 'change_roas_target' : 'change_budget',
+          ...(isRoas ? { roasTarget: targetValue } : { budget: targetValue }),
           expectedStatus: info.campaign_status, expectedBudget: currentBudget,
-          expectedRoasTarget: campaign.auto_bidding_info?.roas_target ?? 0,
+          expectedRoasTarget: currentRoas,
           referenceId: crypto.randomUUID(),
         });
       }
       if (version !== previewVersion) throw new Error('預覽期間輸入已改變，請重新預覽。');
       const summary = node('p', 'query-summary',
-        `沙盒店鋪 ${health.shopId}；${ids.length} 個活動，其中 ${requests.length} 個預算會變更。尚未送出修改請求。`);
-      table(output, ['活動 ID', '名稱', '目前預算 TWD', '新預算 TWD', '結果'], rows);
+        `沙盒店鋪 ${health.shopId}；${ids.length} 個活動，其中 ${requests.length} 個${label}會變更。尚未送出修改請求。`);
+      table(output, ['活動 ID', '名稱', `目前${label}`, `新${label}`, '結果'], rows);
       output.prepend(summary);
-      prepared = { shopId: String(health.shopId), targetBudget, requests };
+      prepared = { shopId: String(health.shopId), targetValue, requests };
       executeButton.disabled = requests.length === 0;
     } catch (error) {
       output.className = 'output error';
@@ -490,7 +500,7 @@ function appendBatchBudgetTool(container) {
   });
   executeButton.addEventListener('click', async () => {
     if (!prepared?.requests.length) return;
-    if (!window.confirm(`確認在沙盒店鋪 ${prepared.shopId} 修改 ${prepared.requests.length} 個廣告活動的每日預算為 TWD ${prepared.targetBudget}？`)) return;
+    if (!window.confirm(`確認在沙盒店鋪 ${prepared.shopId} 修改 ${prepared.requests.length} 個廣告活動的${label}為 ${prepared.targetValue}？`)) return;
     const batch = prepared;
     prepared = null;
     executeButton.disabled = true;
@@ -498,14 +508,16 @@ function appendBatchBudgetTool(container) {
     stopButton.disabled = false;
     stopRequested = false;
     const run = {
-      startedAt: new Date().toISOString(), shopId: batch.shopId, targetBudget: batch.targetBudget,
+      startedAt: new Date().toISOString(), shopId: batch.shopId, targetValue: batch.targetValue,
       entries: batch.requests.map(request => ({ campaignId: request.campaignId,
-        previousBudget: request.expectedBudget, targetBudget: request.budget,
+        previousValue: isRoas ? request.expectedRoasTarget : request.expectedBudget,
+        targetValue: isRoas ? request.roasTarget : request.budget,
         referenceId: request.referenceId, status: 'pending' })),
     };
-    const persist = () => chrome.storage.local.set({ lastBatchBudgetRun: run });
+    const storageKey = isRoas ? 'lastBatchRoasRun' : 'lastBatchBudgetRun';
+    const persist = () => chrome.storage.local.set({ [storageKey]: run });
     const showProgress = () => {
-      output.textContent = `沙盒批量預算修改：${run.entries.filter(entry => entry.status === 'verified').length}／${run.entries.length} 已讀回確認。\n`
+      output.textContent = `沙盒批量${label}修改：${run.entries.filter(entry => entry.status === 'verified').length}／${run.entries.length} 已讀回確認。\n`
         + run.entries.map(entry => `活動 ${entry.campaignId}: ${entry.status}${entry.message ? ` · ${entry.message}` : ''}`).join('\n');
     };
     try {
@@ -523,8 +535,11 @@ function appendBatchBudgetTool(container) {
           await persist();
           const settings = await api(`/api/ads/settings?ids=${request.campaignId}`);
           const campaign = (settings.campaign_list || []).find(item => Number(item.campaign_id) === request.campaignId);
-          if (Number(campaign?.common_info?.campaign_budget) !== request.budget) {
-            throw new Error('讀回的預算與目標不一致，請人工核對。');
+          const readback = isRoas
+            ? Number(campaign?.auto_bidding_info?.roas_target)
+            : Number(campaign?.common_info?.campaign_budget);
+          if (!Number.isFinite(readback) || readback !== (isRoas ? request.roasTarget : request.budget)) {
+            throw new Error(`讀回的${label}與目標不一致，請人工核對。`);
           }
           entry.status = 'verified';
         } catch (error) {
@@ -555,18 +570,20 @@ function appendBatchBudgetTool(container) {
   });
   stopButton.addEventListener('click', () => { stopRequested = true; stopButton.disabled = true; });
   logButton.addEventListener('click', async () => {
-    const { lastBatchBudgetRun } = await chrome.storage.local.get('lastBatchBudgetRun');
-    output.textContent = lastBatchBudgetRun
-      ? `上次批量記錄（${lastBatchBudgetRun.startedAt}）：\n` + lastBatchBudgetRun.entries.map(entry =>
-        `活動 ${entry.campaignId}: ${entry.previousBudget} → ${entry.targetBudget} · ${entry.status}${entry.message ? ` · ${entry.message}` : ''}`).join('\n')
-      : '尚無批量預算修改記錄。';
+    const storageKey = isRoas ? 'lastBatchRoasRun' : 'lastBatchBudgetRun';
+    const lastRun = (await chrome.storage.local.get(storageKey))[storageKey];
+    output.textContent = lastRun
+      ? `上次批量記錄（${lastRun.startedAt}）：\n` + lastRun.entries.map(entry =>
+        `活動 ${entry.campaignId}: ${entry.previousValue ?? entry.previousBudget} → ${entry.targetValue ?? entry.targetBudget} · ${entry.status}${entry.message ? ` · ${entry.message}` : ''}`).join('\n')
+      : `尚無批量${label}修改記錄。`;
   });
   container.append(panel);
 }
 
 function appendManualEditTools(container) {
   appendManualEditTool(container);
-  appendBatchBudgetTool(container);
+  appendBatchValueTool(container, 'budget');
+  appendBatchValueTool(container, 'roas');
 }
 
 function appendPerformanceTool(container) {
@@ -1411,6 +1428,13 @@ function appendRoiBudgetColumn(title, prefix) {
     input.type = 'checkbox';
     boost.append(input, node('span', '', '啟用加速推廣（僅手動 ROI）'));
     column.append(boost);
+    const target = column.querySelector('#edit-roi-target');
+    const syncBoost = () => {
+      boost.hidden = !(Number(target.value) > 0);
+      if (boost.hidden) input.checked = false;
+    };
+    target.addEventListener('input', syncBoost);
+    syncBoost();
   }
   column.append(node('h4', '', '按商品 ID 排除（只改進行中）'));
   column.append(legacyControl('排除的商品 ID（這些不改）', `edit-${prefix}-exclude-ids`, {
@@ -1436,43 +1460,54 @@ function appendRoiBudgetLayout(detail, feature) {
   detail.append(status);
   legacyStatus(detail, feature);
   appendManualEditTools(detail);
-  const budgetButtons = [columns.querySelector('#btn-edit-budget-by-ids'),
-    columns.querySelector('#btn-edit-budget-all')];
+  const buttons = ['roi', 'budget'].flatMap(kind => ['by-ids', 'all']
+    .map(mode => columns.querySelector(`#btn-edit-${kind}-${mode}`)));
   let mappingBusy = false;
-  let selectionVersion = 0;
-  for (const id of ['edit-budget-target', 'edit-budget-only-ids', 'edit-budget-exclude-ids']) {
-    $(id).addEventListener('input', () => {
-      selectionVersion++;
-      const lowerIds = $('batch-budget-ids');
-      lowerIds.value = '';
-      lowerIds.dispatchEvent(new Event('input', { bubbles: true }));
-      status.className = 'output';
-      status.textContent = '上方條件已改變；請重新產生預算修改預覽。';
-    });
+  const selectionVersion = { budget: 0, roas: 0 };
+  for (const kind of ['budget', 'roas']) {
+    for (const id of [`edit-${kind}-target`, `edit-${kind}-only-ids`, `edit-${kind}-exclude-ids`,
+      ...(kind === 'roas' ? ['edit-roi-rapid-boost'] : [])]) {
+      for (const eventName of ['input', 'change']) $(id).addEventListener(eventName, () => {
+        selectionVersion[kind]++;
+        const lowerIds = $(`batch-${kind}-ids`);
+        lowerIds.value = '';
+        lowerIds.dispatchEvent(new Event('input', { bubbles: true }));
+        status.className = 'output';
+        status.textContent = '上方條件已改變；請重新產生修改預覽。';
+      });
+    }
   }
-  for (const [mode, buttonId] of [
-    ['include', 'btn-edit-budget-by-ids'], ['exclude', 'btn-edit-budget-all'],
+  for (const [kind, mode, buttonId] of [
+    ['budget', 'include', 'btn-edit-budget-by-ids'],
+    ['budget', 'exclude', 'btn-edit-budget-all'],
+    ['roas', 'include', 'btn-edit-roi-by-ids'],
+    ['roas', 'exclude', 'btn-edit-roi-all'],
   ]) {
     const button = columns.querySelector(`#${buttonId}`);
     button.disabled = false;
     button.textContent = mode === 'include' ? '預覽按 ID 修改' : '預覽排除後修改';
-    button.title = '只讀對照商品與活動，並開啟下方預算預覽；不會直接修改廣告';
+    button.title = '只讀對照商品與活動，並開啟下方安全預覽；不會直接修改廣告';
     button.addEventListener('click', async () => {
       if (mappingBusy) return;
       mappingBusy = true;
-      budgetButtons.forEach(item => { item.disabled = true; });
-      const version = selectionVersion;
+      buttons.forEach(item => { item.disabled = true; });
+      const version = selectionVersion[kind];
       status.className = 'output';
       status.textContent = '正在對照商品 ID 與進行中廣告…';
       try {
-        const targetInput = $('edit-budget-target');
-        const targetBudget = Number(targetInput.value);
-        if (targetInput.value.trim() === '' || !Number.isFinite(targetBudget) || targetBudget <= 0) {
-          throw new Error('目標每日預算必須大於 0。');
+        const targetInput = $(`edit-${kind}-target`);
+        const targetValue = Number(targetInput.value);
+        if (targetInput.value.trim() === '' || !Number.isFinite(targetValue) || targetValue <= 0) {
+          throw new Error(kind === 'roas'
+            ? '目前僅支援正數目標 ROAS；0 代表切換系統 ROI，尚未接通。'
+            : '目標每日預算必須大於 0。');
         }
-        const itemIds = parseItemIds($(`edit-budget-${mode === 'include' ? 'only' : 'exclude'}-ids`).value,
+        if (kind === 'roas' && $('edit-roi-rapid-boost').checked) {
+          throw new Error('加速推廣尚未核實等價 API，請取消勾選後預覽目標 ROAS。');
+        }
+        const itemIds = parseItemIds($(`edit-${kind}-${mode === 'include' ? 'only' : 'exclude'}-ids`).value,
           { required: mode === 'include' });
-        const lowerPreview = $('batch-budget-preview');
+        const lowerPreview = $(`batch-${kind}-preview`);
         if (lowerPreview.disabled) throw new Error('下方批量任務正在執行，請等待完成。');
         const settings = [];
         const scan = await scanCampaignPages({
@@ -1490,8 +1525,10 @@ function appendRoiBudgetLayout(detail, feature) {
             settings.push(...ids.map(id => byId.get(id)));
           },
         });
-        const selected = selectBudgetCampaigns(settings, itemIds, mode, scan.complete);
-        if (version !== selectionVersion) throw new Error('查詢期間上方條件已改變，請重新預覽。');
+        const selected = kind === 'roas'
+          ? selectRoasCampaigns(settings, itemIds, mode, scan.complete)
+          : selectBudgetCampaigns(settings, itemIds, mode, scan.complete);
+        if (version !== selectionVersion[kind]) throw new Error('查詢期間上方條件已改變，請重新預覽。');
         if (selected.missingIds.length) {
           throw new Error(`找不到這些商品對應的進行中手動選品廣告：${selected.missingIds.join('、')}。`);
         }
@@ -1499,22 +1536,22 @@ function appendRoiBudgetLayout(detail, feature) {
         if (selected.candidates.length > 10) {
           throw new Error(`符合 ${selected.candidates.length} 個活動；目前下方安全批量工具一次最多處理 10 個，請縮小商品範圍。`);
         }
-        const lowerIds = $('batch-budget-ids');
-        const lowerBudget = $('batch-budget-value');
+        const lowerIds = $(`batch-${kind}-ids`);
+        const lowerValue = $(`batch-${kind}-value`);
         lowerIds.value = selected.candidates.map(item => item.campaignId).join(' ');
         lowerIds.dispatchEvent(new Event('input', { bubbles: true }));
-        lowerBudget.value = String(targetBudget);
-        lowerBudget.dispatchEvent(new Event('input', { bubbles: true }));
+        lowerValue.value = String(targetValue);
+        lowerValue.dispatchEvent(new Event('input', { bubbles: true }));
         if (lowerPreview.disabled) throw new Error('下方批量任務正在執行，請等待完成。');
         lowerPreview.click();
-        status.textContent = `已完整核對 ${scan.scanned} 個手動廣告活動，選出 ${selected.candidates.length} 個；下方正在讀取目前預算並產生預覽。尚未送出修改。`;
+        status.textContent = `已完整核對 ${scan.scanned} 個手動廣告活動，選出 ${selected.candidates.length} 個；下方正在讀取目前${kind === 'roas' ? '目標 ROAS' : '預算'}並產生預覽。尚未送出修改。`;
         lowerPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } catch (error) {
         status.className = 'output error';
         status.textContent = error.message || String(error);
       } finally {
         mappingBusy = false;
-        budgetButtons.forEach(item => { item.disabled = false; });
+        buttons.forEach(item => { item.disabled = false; });
       }
     });
   }
@@ -3094,7 +3131,7 @@ async function loadShopOverview() {
     : '資料來自已授權的臺灣沙盒店鋪。';
 }
 
-function renderBatchTaskSummary(run) {
+function renderBatchTaskSummary(run, kind = 'budget') {
   const entries = Array.isArray(run?.entries) ? run.entries : [];
   const processed = entries.filter(entry => entry.status !== 'pending' && entry.status !== 'not_sent');
   const confirmed = entries.filter(entry => entry.status === 'verified');
@@ -3104,7 +3141,7 @@ function renderBatchTaskSummary(run) {
   $('task-success').textContent = String(confirmed.length);
   $('task-review').textContent = String(review.length);
   $('task-last-record').textContent = run
-    ? `最近批量預算任務：測試店鋪 ${run.shopId}，目標每日預算 TWD ${run.targetBudget}。${confirmed.length} 個已讀回確認，${review.length} 個待核對。`
+    ? `最近批量${kind === 'roas' ? '目標 ROAS' : '預算'}任務：測試店鋪 ${run.shopId}，目標 ${run.targetValue ?? run.targetBudget}。${confirmed.length} 個已讀回確認，${review.length} 個待核對。`
     : '尚未開始任何批量任務。';
 }
 
@@ -3140,11 +3177,19 @@ function renderModule(module, preferredFeature) {
 }
 
 async function initialize() {
-  const { lastBatchBudgetRun } = await chrome.storage.local.get('lastBatchBudgetRun');
-  renderBatchTaskSummary(lastBatchBudgetRun);
+  const batchRuns = await chrome.storage.local.get(['lastBatchBudgetRun', 'lastBatchRoasRun']);
+  const showLatestBatch = () => {
+    const budget = batchRuns.lastBatchBudgetRun;
+    const roas = batchRuns.lastBatchRoasRun;
+    const latestKind = roas && (!budget || roas.startedAt > budget.startedAt) ? 'roas' : 'budget';
+    renderBatchTaskSummary(latestKind === 'roas' ? roas : budget, latestKind);
+  };
+  showLatestBatch();
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local' && changes.lastBatchBudgetRun) {
-      renderBatchTaskSummary(changes.lastBatchBudgetRun.newValue);
+    if (areaName === 'local') {
+      if (changes.lastBatchBudgetRun) batchRuns.lastBatchBudgetRun = changes.lastBatchBudgetRun.newValue;
+      if (changes.lastBatchRoasRun) batchRuns.lastBatchRoasRun = changes.lastBatchRoasRun.newValue;
+      if (changes.lastBatchBudgetRun || changes.lastBatchRoasRun) showLatestBatch();
     }
   });
   for (const module of modules) {
