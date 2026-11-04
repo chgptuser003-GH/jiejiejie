@@ -1,7 +1,7 @@
 export const modules = [
   {
     id: 'ads', name: '廣告管理', icon: '📣', features: [
-      { id: 'ads-all', name: '全店開啟廣告', status: 'partial', summary: '篩選未投放商品，設定每日預算、目標 ROAS 或自動競價後批量建立。', details: '新增在架商品的只讀投放預覽；活動掃描完整時才標示未出現在活動的商品，庫存與建立資格仍未確認。單件自動競價廣告已實測，全店批量仍未完成。', tool: 'all-ads' },
+      { id: 'ads-all', name: '全店開啟廣告', status: 'partial', summary: '篩選未投放商品，設定每日預算、目標 ROAS 或自動競價後批量建立。', details: '「僅查詢商品」已按原版結果區顯示未開廣告商品 ID 與暫停活動 ID；使用官方商品及產品廣告接口完整分頁查詢。刪除暫停廣告和兩種全店批量建立尚未完成。', tool: 'all-ads' },
       { id: 'ads-groups', name: '批量開廣告群組', status: 'mapping', summary: '排除已有廣告或零庫存商品，每 30 件組成一組投放。', details: '官方店鋪 GMV Max 與舊版每 30 件商品一組的語義不同，仍需確認等價 API。' },
       { id: 'ads-cpc', name: 'CPC 監控自動重開', status: 'partial', summary: '按 CPC 閾值監控廣告，延時關閉並重建。', details: '每日與每小時績效 API 適配器已完成；監控排程、數據延遲驗證及安全重開流程尚未完成。', tool: 'performance' },
       { id: 'ads-delete', name: '批量刪除廣告', status: 'partial', summary: '按指定或排除商品 ID 批量處理進行中廣告。', details: '原版操作按鈕目前開啟只讀核對視窗，最多掃描 10 頁／1000 活動，逐活動顯示商品關聯、廣告類型與不明原因；不會送出刪除。手動選品刪除端點已有適配器但未沙盒實測。' },

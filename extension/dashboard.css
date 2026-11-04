@@ -113,6 +113,16 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .helper-tool-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: #64748b; background: #eef1f5; font-size: 20px; }
 .helper-tool-card strong { color: #3a4659; font-size: 13px; }.helper-tool-card p { margin: 4px 0 0; color: #758196; font-size: 12px; }
 .helper-query-btn { min-width: 108px; padding: 9px 14px; border: 0; border-radius: 6px; color: #526174; background: #eef1f5; font-weight: 700; }
+.all-shop-query-result { margin-top: 16px; padding: 16px; border: 1px solid #e1e6ed; border-radius: 9px; background: #fff; }
+.all-shop-query-result[hidden], .all-shop-query-status[hidden] { display: none; }
+.all-shop-query-result label { display: block; margin-bottom: 8px; color: #354157; font-size: 13px; font-weight: 700; }
+.all-shop-query-result textarea { display: block; width: 100%; min-height: 148px; padding: 9px; border: 1px solid #d7dde6; border-radius: 6px; background: #f8f9fa; resize: vertical; }
+.all-shop-query-result textarea { font-family: monospace; font-size: 13px; }
+.all-shop-query-hint { display: block; margin-top: 8px; color: #6b7280; font-size: 11px; }
+.all-shop-query-result#paused-ads-result textarea { background: #fff3cd; border-color: #ffc107; }
+.all-shop-query-result#paused-ads-result .all-shop-query-hint { color: #856404; }
+.all-shop-query-result button { width: auto; margin-top: 10px; }
+.all-shop-query-status { margin: 12px 0; color: #d94729; font-size: 12px; }
 .all-shop-status { margin-top: 14px; }
 .ad-groups-layout { padding: 16px; }.group-intro { margin: 0 0 14px; color: #66758b; font-size: 11px; }
 .group-parameter-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }

@@ -1,10 +1,10 @@
-# 原版 6.9.9 與 CF 0.9.23：UI／API 對照驗收
+# 原版 6.9.9 與 CF 0.9.24：UI／API 對照驗收
 
 依據使用者提供的 `shopee插件助手 10.2.zip`，核對原版 `popup.html`、`dashboard.html`、`topup.html`、`shipping-console.html`、`marketing-console.html`、`product-management.html` 及其 JS；新版依據 `extension/`、`open-platform/` 與臺灣沙盒店鋪實測記錄。本文件只記錄可證實的狀態。「有欄位」不等於「功能可用」，也不代表版面逐像素一致。
 
 ## UI 對照
 
-| 畫面 | 原版 | CF 0.9.23 | 尚有差異 |
+| 畫面 | 原版 | CF 0.9.24 | 尚有差異 |
 |---|---|---|---|
 | 彈窗 | 7 個工具卡片、站點選擇、狀態；另有原作者帳號／授權系統 | 7 個工具卡片、TW 沙盒標籤、後端連線及授權狀態；額外測試查詢與快速計算已移除 | 工具卡片排版接近；原作者帳密系統未移植，改用 Shopee OAuth 和本機配對；多站點尚未做 |
 | 廣告控制台 | 12 個導航頁籤，專屬表單、任務進度和日誌 | 12 個導航入口按原版主要分區重排；額外的下方測試面板已從主畫面移除，部分核對流程由原版按鈕開啟視窗 | 原版各頁複雜的彈窗、篩選互動、分區細節及表格尚未完整重建；不能宣稱像素一致 |
@@ -20,7 +20,7 @@
 
 | 頁籤 | 原版輸入與操作 ID；CF 目前已建立相同 ID | 實際接通的行為 |
 |---|---|---|
-| 全店開啟廣告 | `daily-budget`、`exclude-ids`、`target-value`、`global-rapid-boost`、`start-process`、`start-system-roi`、`query-no-ads-products` | 只讀投放範圍預覽；兩種批量建立按鈕停用 |
+| 全店開啟廣告 | `daily-budget`、`exclude-ids`、`target-value`、`global-rapid-boost`、`start-process`、`start-system-roi`、`query-no-ads-products` | 「僅查詢商品」顯示原版的商品 ID 與暫停活動 ID 結果區，從官方 API 完整分頁讀取；暫停廣告刪除與兩種批量建立仍停用。官方產品廣告清單與原版賣家中心 `new_cpc_homepage` 範圍未證實完全等價。 |
 | 批量開廣告群組 | `group-roi-target`、`group-daily-budget`、`group-exclude-ids`、`btn-start-ad-groups` | 表單可檢視；建立按鈕停用，官方 GMV Max 尚未證實等價 |
 | CPC 監控自動重開 | `monitor-target-ids`、`monitor-cpc-threshold`、`monitor-roi-type`、`monitor-budget`、`monitor-roi-target`、`monitor-rapid-boost`、`monitor-reopen-delay`、`btn-start-cpc-monitor`、`btn-stop-cpc-monitor` | 下方可查績效；監控排程和重開按鈕停用 |
 | 批量刪除廣告 | `delete-exclude-ids`、`delete-only-ids`、`btn-delete-all`、`btn-delete-by-ids` | 原版按鈕目前只開啟只讀核對視窗，可預覽最多 1000 個活動、廣告類型、商品關聯與不明原因；不會送出刪除。額外的預覽及 CSV 按鈕已移除 |

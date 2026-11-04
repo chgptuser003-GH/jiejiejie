@@ -6,6 +6,7 @@ import { parseItemIds, selectBudgetCampaigns, selectDeletionCandidates, selectRo
 import { dateRangeFromPreset, matchesCampaignMetrics, matchesMetricConditions, summarizeDailyMetrics } from './ad-filter.js';
 import { classifyCampaignHealth } from './ad-health.js';
 import { selectAdCreationItems } from './ad-create-selection.js';
+import { classifyAllShopAds } from './all-shop-query.js';
 
 const BASE = 'http://127.0.0.1:8787';
 const BUDGET_DRAFT_KEY = 'cfBudgetRulesDraftV1';
@@ -184,58 +185,43 @@ function appendCampaignTool(container) {
   container.append(panel);
 }
 
-function appendAllAdCandidates(container) {
-  const { panel, fields, output } = toolPanel('在架商品投放預覽',
-    '只讀檢查本頁在架商品是否已出現在廣告活動；庫存和建立資格尚未驗證，不會自動建立廣告。');
-  const offset = field(fields, '商品起始位置', 'all-ad-item-offset', { value: '0', min: '0', step: '1' });
-  const size = field(fields, '本頁商品上限', 'all-ad-item-size', { value: '100', min: '1', step: '1' });
-  runButton(panel, output, async target => {
-    const itemOffset = Number(offset.value);
-    const pageSize = Number(size.value);
-    if (!Number.isSafeInteger(itemOffset) || itemOffset < 0
-      || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
-      throw new Error('起始位置須為非負整數，本頁上限須為 1–100。');
+async function queryAllShopAdState() {
+  const products = [];
+  const campaigns = [];
+  const seenProducts = new Set();
+  const seenCampaigns = new Set();
+  let offset = 0;
+  for (let page = 0; page < 1000; page++) {
+    const result = await api(`/api/items?status=NORMAL&offset=${offset}&pageSize=100`);
+    if (!Array.isArray(result.item)) throw new Error('在架商品清單格式不正確。');
+    for (const item of result.item) {
+      const id = String(item?.item_id ?? '');
+      if (!/^\d+$/.test(id) || seenProducts.has(id)) throw new Error('在架商品清單有缺失或重複，已停止查詢。');
+      seenProducts.add(id);
+      products.push(id);
     }
-    const products = await api(`/api/items?status=NORMAL&offset=${itemOffset}&pageSize=${pageSize}`);
-    const items = products.item || [];
-    if (!items.length) {
-      target.textContent = '本頁沒有在架商品。';
-      return;
+    if (!result.has_next_page) break;
+    if (!result.item.length || page === 999) throw new Error('在架商品尚未查全，不能判定未開廣告商品。');
+    offset += result.item.length;
+  }
+  offset = 0;
+  for (let page = 0; page < 1000; page++) {
+    const result = await api(`/api/ads?type=all&limit=100&offset=${offset}`);
+    if (!Array.isArray(result.campaign_list)) throw new Error('廣告活動清單格式不正確。');
+    const ids = result.campaign_list.map(item => String(item?.campaign_id ?? ''));
+    if (ids.some(id => !/^\d+$/.test(id) || seenCampaigns.has(id))) throw new Error('廣告活動清單有缺失或重複，已停止查詢。');
+    ids.forEach(id => seenCampaigns.add(id));
+    if (ids.length) {
+      const settings = await api(`/api/ads/settings?ids=${encodeURIComponent(ids.join(','))}`);
+      const byId = new Map((settings.campaign_list || []).map(item => [String(item.campaign_id), item]));
+      if (ids.some(id => !byId.has(id))) throw new Error('部分廣告設定未回傳，不能判定未開廣告商品。');
+      campaigns.push(...ids.map(id => byId.get(id)));
     }
-    const advertisedIds = new Set();
-    let adOffset = 0;
-    let scanComplete = false;
-    let scannedCampaigns = 0;
-    for (let page = 0; page < 5; page++) {
-      const listed = await api(`/api/ads?limit=100&offset=${adOffset}`);
-      const campaigns = (listed.campaign_list || []).filter(item => item.campaign_id);
-      if (campaigns.length) {
-        const joined = encodeURIComponent(campaigns.map(item => item.campaign_id).join(','));
-        const settings = await api(`/api/ads/settings?ids=${joined}`);
-        if ((settings.campaign_list || []).length !== campaigns.length) {
-          throw new Error('有廣告活動設定未回傳，無法可靠判定商品是否已投放。');
-        }
-        for (const campaign of settings.campaign_list) {
-          for (const itemId of campaign.common_info?.item_id_list || []) advertisedIds.add(String(itemId));
-        }
-        scannedCampaigns += campaigns.length;
-      }
-      if (!listed.has_next_page) { scanComplete = true; break; }
-      if (!campaigns.length) break;
-      adOffset += campaigns.length;
-    }
-    const rows = items.map(item => [item.item_id, item.item_status,
-      advertisedIds.has(String(item.item_id)) ? '已出現在廣告活動'
-        : scanComplete ? '未出現在廣告活動；庫存與資格未確認' : '未確認：活動尚未掃完']);
-    table(target, ['商品 ID', '商品狀態', '投放預覽'], rows);
-    const candidates = scanComplete ? rows.filter(row => row[2].startsWith('未出現在')).length : 0;
-    target.prepend(node('p', 'query-summary',
-      `本頁 ${items.length} 件在架商品；已掃描 ${scannedCampaigns} 個活動。`
-      + (scanComplete ? `其中 ${candidates} 件未出現在活動。` : '活動超過本次掃描範圍，不能判定未投放商品。')
-      + (products.has_next_page ? ' 後面還有商品，請調整商品起始位置。' : '')));
-  }, '預覽在架商品');
-  container.append(panel);
-  return panel;
+    if (!result.has_next_page) break;
+    if (!ids.length || page === 999) throw new Error('廣告活動尚未查全，不能判定未開廣告商品。');
+    offset += ids.length;
+  }
+  return { products, campaigns };
 }
 
 function appendProductTool(container) {
@@ -1322,18 +1308,81 @@ function appendAllShopLayout(detail, feature) {
   const helper = node('div', 'helper-tool-card');
   const helperCopy = node('div');
   helperCopy.append(node('strong', '', '執行前想先確認範圍？'),
-    node('p', '', '查詢在架商品是否已出現在廣告活動，不會修改資料。'));
+    node('p', '', '查詢目前尚未開啟廣告的商品 ID，不會修改任何資料。'));
   const query = node('button', 'helper-query-btn', '僅查詢商品');
   query.type = 'button';
   query.id = 'query-no-ads-products';
   helper.append(node('span', 'helper-tool-icon', '⌕'), helperCopy, query);
   detail.append(setup, execution, helper);
-  const candidatePanel = appendAllAdCandidates(detail);
-  candidatePanel.hidden = true;
-  query.addEventListener('click', () => {
-    candidatePanel.hidden = false;
-    candidatePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    candidatePanel.querySelector('.run-button')?.click();
+  const result = node('div', 'all-shop-query-result');
+  result.id = 'no-ads-products-result';
+  result.hidden = true;
+  const productLabel = node('label', '', '未開廣告商品 ID 列表（共 ');
+  const productCount = node('span', '', '0');
+  productCount.id = 'no-ads-count';
+  productLabel.append(productCount, document.createTextNode(' 個商品）'));
+  const productIds = node('textarea');
+  productIds.id = 'no-ads-products-textarea';
+  productIds.rows = 8;
+  productIds.readOnly = true;
+  productIds.placeholder = '未開廣告的商品 ID 將顯示在這裡...';
+  productIds.addEventListener('click', () => productIds.select());
+  const copy = node('button', 'preview-delete-button', '複製所有 ID');
+  copy.type = 'button';
+  copy.id = 'copy-no-ads-ids';
+  copy.addEventListener('click', async () => {
+    if (!productIds.value || productIds.dataset.empty === 'true') return;
+    await navigator.clipboard.writeText(productIds.value);
+    copy.textContent = '已複製';
+    setTimeout(() => { copy.textContent = '複製所有 ID'; }, 1500);
+  });
+  result.append(productLabel, productIds,
+    node('small', 'all-shop-query-hint', '💡 點擊文字框可全選並複製商品 ID'), copy);
+  const pausedResult = node('div', 'all-shop-query-result');
+  pausedResult.id = 'paused-ads-result';
+  pausedResult.hidden = true;
+  const pausedLabel = node('label', '', '暫停廣告 ID 列表（Campaign ID，共 ');
+  const pausedCount = node('span', '', '0');
+  pausedCount.id = 'paused-ads-count';
+  pausedLabel.append(pausedCount, document.createTextNode(' 個廣告）'));
+  const pausedIds = node('textarea');
+  pausedIds.id = 'paused-ads-textarea';
+  pausedIds.rows = 8;
+  pausedIds.readOnly = true;
+  pausedIds.placeholder = '暫停的廣告 ID 將顯示在這裡...';
+  const pausedDelete = node('button', 'task-primary-btn', '刪除所有暫停廣告');
+  pausedDelete.type = 'button';
+  pausedDelete.id = 'delete-paused-ads';
+  pausedDelete.disabled = true;
+  pausedDelete.title = '刪除暫停廣告尚未完成官方 API 驗證';
+  pausedResult.append(pausedLabel, pausedIds,
+    node('small', 'all-shop-query-hint', '⚠️ 這些是暫停狀態的廣告 ID，可批量刪除'), pausedDelete);
+  const queryStatus = node('p', 'all-shop-query-status');
+  queryStatus.hidden = true;
+  detail.append(result, pausedResult, queryStatus);
+  query.addEventListener('click', async () => {
+    query.disabled = true;
+    query.textContent = '查詢中...';
+    result.hidden = pausedResult.hidden = true;
+    queryStatus.hidden = false;
+    queryStatus.textContent = '正在查詢商品和廣告活動…';
+    try {
+      const { products, campaigns } = await queryAllShopAdState();
+      const { withoutOngoingAds, pausedCampaignIds } = classifyAllShopAds(products, campaigns);
+      productIds.value = withoutOngoingAds.length ? withoutOngoingAds.join('\n') : '所有商品都已開啟廣告';
+      productIds.dataset.empty = String(!withoutOngoingAds.length);
+      productCount.textContent = String(withoutOngoingAds.length);
+      result.hidden = false;
+      pausedIds.value = pausedCampaignIds.join('\n');
+      pausedCount.textContent = String(pausedCampaignIds.length);
+      pausedResult.hidden = !pausedCampaignIds.length;
+      queryStatus.hidden = true;
+    } catch (error) {
+      queryStatus.textContent = `查詢失敗：${error.message || String(error)}`;
+    } finally {
+      query.disabled = false;
+      query.textContent = '僅查詢商品';
+    }
   });
 }
 
