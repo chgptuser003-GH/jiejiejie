@@ -17,18 +17,28 @@ export function selectDeletionCandidates(campaigns, ids, mode) {
     throw new TypeError('invalid deletion preview inputs');
   }
   const candidates = [];
-  let unknown = 0;
+  const unknownCampaigns = [];
   for (const campaign of campaigns) {
     const info = campaign?.common_info;
-    if (!info || !Number.isSafeInteger(Number(campaign.campaign_id))) { unknown++; continue; }
+    const campaignId = Number(campaign?.campaign_id);
+    if (!info || !Number.isSafeInteger(campaignId) || campaignId <= 0) {
+      unknownCampaigns.push({ campaignId: campaign?.campaign_id ?? '', reason: '活動設定缺失' });
+      continue;
+    }
     if (info.campaign_status !== 'ongoing') continue;
     const itemIds = Array.isArray(info.item_id_list) ? info.item_id_list.map(String) : [];
-    if (!itemIds.length) { unknown++; continue; }
+    if (!itemIds.length || itemIds.some(id => !/^\d+$/.test(id)
+      || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) || !info.ad_type) {
+      unknownCampaigns.push({ campaignId, reason: !itemIds.length ? '商品關聯缺失'
+        : !info.ad_type ? '廣告類型缺失' : '商品 ID 格式不正確' });
+      continue;
+    }
     if (mode === 'exclude' && itemIds.some(id => ids.has(id))) continue;
     if (mode === 'include' && !itemIds.some(id => ids.has(id))) continue;
-    candidates.push({ campaignId: campaign.campaign_id, itemIds, name: info.ad_name || '', status: info.campaign_status });
+    candidates.push({ campaignId, itemIds, name: info.ad_name || '', status: info.campaign_status,
+      adType: info.ad_type });
   }
-  return { candidates, unknown };
+  return { candidates, unknown: unknownCampaigns.length, unknownCampaigns };
 }
 
 export function selectBudgetCampaigns(campaigns, ids, mode, complete) {

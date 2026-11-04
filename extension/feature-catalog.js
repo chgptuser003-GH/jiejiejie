@@ -4,7 +4,7 @@ export const modules = [
       { id: 'ads-all', name: '全店開啟廣告', status: 'partial', summary: '篩選未投放商品，設定每日預算、目標 ROAS 或自動競價後批量建立。', details: '新增在架商品的只讀投放預覽；活動掃描完整時才標示未出現在活動的商品，庫存與建立資格仍未確認。單件自動競價廣告已實測，全店批量仍未完成。', tool: 'all-ads' },
       { id: 'ads-groups', name: '批量開廣告群組', status: 'mapping', summary: '排除已有廣告或零庫存商品，每 30 件組成一組投放。', details: '官方店鋪 GMV Max 與舊版每 30 件商品一組的語義不同，仍需確認等價 API。' },
       { id: 'ads-cpc', name: 'CPC 監控自動重開', status: 'partial', summary: '按 CPC 閾值監控廣告，延時關閉並重建。', details: '每日與每小時績效 API 適配器已完成；監控排程、數據延遲驗證及安全重開流程尚未完成。', tool: 'performance' },
-      { id: 'ads-delete', name: '批量刪除廣告', status: 'partial', summary: '按指定或排除商品 ID 批量處理進行中廣告。', details: '已接入最多 10 頁／1000 活動的只讀刪除範圍預覽，關聯商品不明的活動會排除；真正的批量刪除、逐筆確認及任務紀錄尚未完成。' },
+      { id: 'ads-delete', name: '批量刪除廣告', status: 'partial', summary: '按指定或排除商品 ID 批量處理進行中廣告。', details: '最多 10 頁／1000 活動的只讀刪除範圍預覽可逐活動顯示廣告類型、商品 ID、API 對照與資料不明原因，並可下載標記完整／不完整的 CSV 核對表。手動選品刪除端點已有適配器但未沙盒實測；批量刪除按鈕仍停用。' },
       { id: 'ads-specific', name: '指定商品開廣告', status: 'partial', summary: '對指定商品設定預算、目標 ROAS 和投放模式。', details: '單件手動選品、平台自動競價建立已在沙盒實測。原版自動 ROI 區的商品 ID 可帶入下方最多 10 件的安全批量預覽；須在架、廣告掃描完整且沒有既有廣告，確認後才逐件建立並讀回，批量介面尚待沙盒實測。平台自動競價與原版系統 ROI 尚未證實等價；手動 ROI、加速推廣未接通。', tool: 'manual-ad' },
       { id: 'ads-roi', name: '批量修改 ROI／預算', status: 'partial', summary: '以商品或活動 ID 批量修改目標 ROAS 與每日預算。', details: '上方指定或排除商品 ID 可完整掃描手動選品廣告，最多 10 個活動帶入下方安全預覽；仍須另按確認才逐筆修改並讀回，介面尚待沙盒實測。正數目標 ROAS 僅允許 manual 競價且目前目標可讀的活動；auto 競價、ROI=0 的系統模式切換與加速推廣不支援。', tool: 'manual-edit' },
       { id: 'ads-boost', name: '加速推廣控制', status: 'mapping', summary: '批量開關手動 ROAS 廣告的加速推廣。', details: '尚未核實官方 API 有與舊版「加速推廣」完全相同的設定。' },

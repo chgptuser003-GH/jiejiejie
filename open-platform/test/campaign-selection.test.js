@@ -10,17 +10,20 @@ test('item ID parser accepts separators and rejects unsafe values', () => {
 
 test('deletion preview protects excluded items and unknown associations', () => {
   const campaigns = [
-    { campaign_id: 1, common_info: { campaign_status: 'ongoing', item_id_list: [12, 13] } },
-    { campaign_id: 2, common_info: { campaign_status: 'ongoing', item_id_list: [14] } },
-    { campaign_id: 3, common_info: { campaign_status: 'paused', item_id_list: [12] } },
-    { campaign_id: 4, common_info: { campaign_status: 'ongoing', item_id_list: [] } },
+    { campaign_id: 1, common_info: { ad_type: 'manual', campaign_status: 'ongoing', item_id_list: [12, 13] } },
+    { campaign_id: 2, common_info: { ad_type: 'auto', campaign_status: 'ongoing', item_id_list: [14] } },
+    { campaign_id: 3, common_info: { ad_type: 'manual', campaign_status: 'paused', item_id_list: [12] } },
+    { campaign_id: 4, common_info: { ad_type: 'manual', campaign_status: 'ongoing', item_id_list: [] } },
+    { campaign_id: 5, common_info: { ad_type: 'manual', campaign_status: 'ongoing', item_id_list: [null] } },
   ];
   const excluded = selectDeletionCandidates(campaigns, parseItemIds('12'), 'exclude');
   assert.deepEqual(excluded.candidates.map(item => item.campaignId), [2]);
-  assert.equal(excluded.unknown, 1);
+  assert.equal(excluded.unknown, 2);
+  assert.equal(excluded.candidates[0].adType, 'auto');
+  assert.deepEqual(excluded.unknownCampaigns.map(item => item.campaignId), [4, 5]);
   const included = selectDeletionCandidates(campaigns, parseItemIds('12', { required: true }), 'include');
   assert.deepEqual(included.candidates.map(item => item.campaignId), [1]);
-  assert.equal(included.unknown, 1);
+  assert.equal(included.unknown, 2);
 });
 
 test('budget selection requires a complete scan and known product mapping', () => {

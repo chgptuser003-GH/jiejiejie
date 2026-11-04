@@ -1424,13 +1424,33 @@ function appendDeleteAdsLayout(detail, feature) {
     button.title = '批量刪除尚未完成預覽、逐筆確認與沙盒驗證';
     const preview = node('button', 'preview-delete-button', '只讀預覽');
     preview.type = 'button';
+    const exportButton = node('button', 'preview-delete-button', '下載核對表 CSV');
+    exportButton.type = 'button';
+    exportButton.disabled = true;
     const actions = node('div', 'legacy-action-buttons');
-    actions.append(preview, button);
+    actions.append(preview, exportButton, button);
     action.append(info, actions);
     const result = node('div', 'output');
     result.hidden = true;
+    const headers = ['活動 ID', '名稱', '狀態', '廣告類型', '商品 ID', 'API 對照', '掃描範圍'];
+    let exportRows = null;
+    let previewVersion = 0;
+    textarea.addEventListener('input', () => {
+      previewVersion++;
+      exportRows = null;
+      exportButton.disabled = true;
+      result.hidden = true;
+    });
+    exportButton.addEventListener('click', () => {
+      if (!exportRows) return;
+      downloadCsv(headers, exportRows,
+        `shopee-sandbox-ad-deletion-preview-${id === 'delete-exclude-ids' ? 'exclude' : 'include'}-${todayTaipei()}.csv`);
+    });
     preview.addEventListener('click', async () => {
+      const version = ++previewVersion;
       preview.disabled = true;
+      exportRows = null;
+      exportButton.disabled = true;
       result.hidden = false;
       result.className = 'output';
       result.textContent = '正在讀取活動…';
@@ -1438,7 +1458,7 @@ function appendDeleteAdsLayout(detail, feature) {
         const mode = id === 'delete-exclude-ids' ? 'exclude' : 'include';
         const ids = parseItemIds(textarea.value, { required: mode === 'include' });
         const selected = [];
-        let unknown = 0;
+        const unknownCampaigns = [];
         const scan = await scanCampaignPages({
           maxPages: 10,
           fetchPage: ({ offset, limit }) => api(`/api/ads?limit=${limit}&offset=${offset}`),
@@ -1453,13 +1473,20 @@ function appendDeleteAdsLayout(detail, feature) {
             }
             const pageResult = selectDeletionCandidates(campaignIds.map(campaignId => byId.get(campaignId)), ids, mode);
             selected.push(...pageResult.candidates);
-            unknown += pageResult.unknown;
+            unknownCampaigns.push(...pageResult.unknownCampaigns);
           },
         });
-        table(result, ['活動 ID', '名稱', '狀態', '商品 ID'], selected.map(item => [
-          item.campaignId, item.name, item.status, item.itemIds.join('、'),
-        ]));
-        result.prepend(node('p', 'query-summary', `只讀預覽：已掃描 ${scan.scanned} 個活動；符合條件 ${selected.length} 個；商品關聯不明 ${unknown} 個已排除。${scan.complete ? '活動清單已讀完。' : `後面仍有資料，從位置 ${scan.nextOffset} 繼續；此結果不完整。`}`));
+        if (version !== previewVersion) throw new Error('預覽期間輸入已改變，請重新核對。');
+        const scope = scan.complete ? '完整' : '不完整';
+        const rows = selected.map(item => [item.campaignId, item.name, item.status,
+          item.adType, item.itemIds.join('、'), item.adType === 'manual'
+            ? '手動選品刪除 API 已對照；尚未沙盒驗證' : '尚無已對照的刪除流程', scope]);
+        rows.push(...unknownCampaigns.map(item => [item.campaignId, '', '待核對', '', '',
+          `已排除：${item.reason}`, scope]));
+        table(result, headers, rows);
+        result.prepend(node('p', 'query-summary', `只讀預覽：已掃描 ${scan.scanned} 個活動；符合條件 ${selected.length} 個（手動選品 ${selected.filter(item => item.adType === 'manual').length} 個）；關聯或類型不明 ${unknownCampaigns.length} 個已排除。${scan.complete ? '活動清單已讀完。' : `後面仍有資料，從位置 ${scan.nextOffset} 繼續；此結果不完整。`}刪除請求尚未接通。`));
+        exportRows = rows;
+        exportButton.disabled = false;
       } catch (error) {
         result.className = 'output error';
         result.textContent = error.message || String(error);
