@@ -5,6 +5,7 @@ import { scanCampaignPages } from './campaign-scan.js';
 import { parseItemIds, selectDeletionCandidates } from './campaign-selection.js';
 
 const BASE = 'http://127.0.0.1:8787';
+const BUDGET_DRAFT_KEY = 'cfBudgetRulesDraftV1';
 const node = (tag, className, text) => {
   const element = document.createElement(tag);
   if (className) element.className = className;
@@ -1727,7 +1728,11 @@ function makeBudgetRule(index, onRemove) {
       onRemove();
     }
   });
-  head.append(remove);
+  const copy = node('button', 'preview-delete-button budget-rule-copy', '複製規則');
+  copy.type = 'button';
+  const headActions = node('div', 'budget-rule-head-actions');
+  headActions.append(copy, remove);
+  head.append(headActions);
   row.append(head);
   const top = node('div', 'budget-rule-top');
   const product = node('section', 'budget-rule-column');
@@ -1786,9 +1791,9 @@ function makeBudgetRule(index, onRemove) {
   ] });
   executeToday.control.className = 'rule-roi-execute-today';
   pointArea.append(executeToday.wrapper);
-  const points = node('div', 'budget-time-list');
+  const points = node('div', 'budget-time-list budget-roi-time-list');
   const addPoint = node('button', 'preview-delete-button', '＋ 添加時間點');
-  addPoint.type = 'button';
+  addPoint.type = 'button'; addPoint.classList.add('budget-add-roi-time');
   addPoint.addEventListener('click', () => {
     const item = node('div', 'budget-time-row');
     budgetRuleField(item, 'rule-roi-time', '開始時間', { type: 'time', value: '02:00' });
@@ -1812,9 +1817,9 @@ function makeBudgetRule(index, onRemove) {
   windows.append(node('h4', '', '加預算時間控制'));
   const allDay = budgetRuleCheck(windows, 'rule-all-day', '不限時間（固定到 23:55 截止）', true);
   const windowArea = node('div', 'budget-subsection');
-  const addWindow = node('button', 'preview-delete-button', '＋ 添加時間段');
+  const addWindow = node('button', 'preview-delete-button budget-add-window', '＋ 添加時間段');
   addWindow.type = 'button';
-  const windowList = node('div', 'budget-time-list');
+  const windowList = node('div', 'budget-time-list budget-window-list');
   addWindow.addEventListener('click', () => {
     const item = node('div', 'budget-time-row');
     budgetRuleField(item, 'rule-window-start', '開始', { type: 'time', value: '09:00' });
@@ -1825,7 +1830,7 @@ function makeBudgetRule(index, onRemove) {
   });
   allDay.addEventListener('change', () => { windowArea.hidden = allDay.checked; });
   windowArea.append(addWindow, windowList);
-  windows.append(windowArea, node('p', 'group-intro', '時間段最晚到 23:55；目前只保存畫面草稿，不會啟動排程。'));
+  windows.append(windowArea, node('p', 'group-intro', '時間段最晚到 23:55；設定會保存在此瀏覽器，不會啟動排程。'));
   bottom.append(schedule, windows);
   row.append(bottom);
   const preview = node('button', 'preview-delete-button budget-rule-apply', '用此規則預覽');
@@ -1835,6 +1840,66 @@ function makeBudgetRule(index, onRemove) {
   pointArea.hidden = true;
   windowArea.hidden = true;
   return row;
+}
+
+const budgetDraftFields = [
+  'rule-item-ids', 'rule-add-amount', 'rule-max-budget', 'rule-delay-min',
+  'rule-check-interval', 'rule-cpc-limit', 'rule-min-roi', 'rule-repeat',
+  'rule-gap-range', 'rule-default-budget', 'rule-pause-at-reset',
+  'rule-bump-roi-at-reset', 'rule-roi-target', 'rule-resume-time',
+  'rule-roi-restore-time', 'rule-roi-restore', 'rule-enable-roi-time-points',
+  'rule-roi-execute-today', 'rule-all-day',
+];
+
+function captureBudgetRule(row) {
+  const fields = {};
+  for (const name of budgetDraftFields) {
+    const control = row.querySelector(`.${name}`);
+    fields[name] = control.type === 'checkbox' ? control.checked : control.value;
+  }
+  return {
+    fields,
+    roiPoints: [...row.querySelectorAll('.budget-roi-time-list .budget-time-row')].map(item => ({
+      time: item.querySelector('.rule-roi-time').value,
+      roi: item.querySelector('.rule-roi-value').value,
+    })),
+    windows: [...row.querySelectorAll('.budget-window-list .budget-time-row')].map(item => ({
+      start: item.querySelector('.rule-window-start').value,
+      end: item.querySelector('.rule-window-end').value,
+    })),
+  };
+}
+
+function applyBudgetRule(row, draft) {
+  if (!draft || typeof draft !== 'object') return;
+  for (const name of budgetDraftFields) {
+    const control = row.querySelector(`.${name}`);
+    const value = draft.fields?.[name];
+    if (control && (typeof value === 'string' || typeof value === 'boolean')) {
+      if (control.type === 'checkbox') control.checked = value === true;
+      else if (typeof value === 'string') control.value = value;
+    }
+  }
+  if (row.querySelector('.rule-bump-roi-at-reset').checked &&
+      row.querySelector('.rule-enable-roi-time-points').checked) {
+    row.querySelector('.rule-enable-roi-time-points').checked = false;
+  }
+  for (const item of Array.isArray(draft.roiPoints) ? draft.roiPoints.slice(0, 20) : []) {
+    row.querySelector('.budget-add-roi-time').click();
+    const target = row.querySelector('.budget-roi-time-list .budget-time-row:last-child');
+    if (typeof item?.time === 'string') target.querySelector('.rule-roi-time').value = item.time;
+    if (typeof item?.roi === 'string') target.querySelector('.rule-roi-value').value = item.roi;
+  }
+  for (const item of Array.isArray(draft.windows) ? draft.windows.slice(0, 20) : []) {
+    row.querySelector('.budget-add-window').click();
+    const target = row.querySelector('.budget-window-list .budget-time-row:last-child');
+    if (typeof item?.start === 'string') target.querySelector('.rule-window-start').value = item.start;
+    if (typeof item?.end === 'string') target.querySelector('.rule-window-end').value = item.end;
+  }
+  for (const name of ['rule-pause-at-reset', 'rule-bump-roi-at-reset',
+    'rule-enable-roi-time-points', 'rule-all-day']) {
+    row.querySelector(`.${name}`).dispatchEvent(new Event('change'));
+  }
 }
 
 function appendBudgetLayout(detail, feature) {
@@ -1847,13 +1912,49 @@ function appendBudgetLayout(detail, feature) {
   form.append(states, node('p', 'group-intro', '運行中的規則在原版會鎖定編輯。'));
   const list = node('div', 'budget-rule-list');
   list.id = 'rule-list';
+  let restoring = true;
+  let applyingDraft = false;
+  let saveTimer;
+  const draftStatus = node('p', 'query-note', '正在讀取本機規則草稿…');
+  const saveDraft = () => {
+    if (applyingDraft) return;
+    restoring = false;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      const stateFilter = form.querySelector('input[name="state-filter"]:checked')?.value || 'ongoing';
+      const rules = [...list.children].map(captureBudgetRule);
+      try {
+        await chrome.storage.local.set({ [BUDGET_DRAFT_KEY]: { stateFilter, rules } });
+        if (form.isConnected) draftStatus.textContent = '規則草稿已保存於此瀏覽器；自動輪詢仍未啟動。';
+      } catch (error) {
+        if (form.isConnected) draftStatus.textContent = `規則草稿保存失敗：${error.message || error}`;
+      }
+    }, 250);
+  };
   const renumber = () => {
     [...list.children].forEach((row, index) => {
       row.querySelector('.budget-rule-head h3').textContent = `規則 ${index + 1}`;
     });
+    saveDraft();
   };
   list.append(makeBudgetRule(1, renumber));
   form.append(list);
+  form.addEventListener('input', saveDraft);
+  form.addEventListener('change', saveDraft);
+  form.addEventListener('click', event => {
+    if (event.target.closest('.budget-rule-copy')) {
+      const source = event.target.closest('.budget-rule-row');
+      const copied = captureBudgetRule(source);
+      copied.fields['rule-item-ids'] = '';
+      const row = makeBudgetRule(1, renumber);
+      source.after(row);
+      applyBudgetRule(row, copied);
+      renumber();
+      row.querySelector('.rule-item-ids').focus();
+    } else if (event.target.closest('.budget-add-roi-time, .budget-add-window, .budget-time-row button')) {
+      saveDraft();
+    }
+  });
   const controls = node('div', 'budget-controls');
   const add = node('button', 'run-button', '＋ 添加規則');
   add.type = 'button'; add.id = 'btn-add-rule';
@@ -1868,8 +1969,33 @@ function appendBudgetLayout(detail, feature) {
     button.title = '可靠排程與廣告寫入尚未完成沙盒驗證';
     controls.append(button);
   }
-  form.append(controls, node('p', 'query-note', '23:55 還原、輪詢及次日恢復尚未接入；下方可用樣本數據預覽規則的數值門檻。時間窗、重複追加和日終動作不包含在此預覽內。'));
+  form.append(controls, draftStatus, node('p', 'query-note', '23:55 還原、輪詢及次日恢復尚未接入；下方可用樣本數據預覽規則的數值門檻。時間窗、重複追加和日終動作不包含在此預覽內。'));
   detail.append(form);
+  void chrome.storage.local.get(BUDGET_DRAFT_KEY).then(result => {
+    if (!form.isConnected || !restoring) return;
+    const draft = result[BUDGET_DRAFT_KEY];
+    if (Array.isArray(draft?.rules) && draft.rules.length) {
+      applyingDraft = true;
+      try {
+        list.replaceChildren();
+        for (const rule of draft.rules.slice(0, 50)) {
+          const row = makeBudgetRule(1, renumber);
+          list.append(row);
+          applyBudgetRule(row, rule);
+        }
+        const selected = draft.stateFilter === 'all' ? 'all' : 'ongoing';
+        form.querySelector(`input[name="state-filter"][value="${selected}"]`).checked = true;
+        renumber();
+      } finally {
+        applyingDraft = false;
+      }
+    }
+    restoring = false;
+    draftStatus.textContent = '規則草稿只保存在此瀏覽器；自動輪詢仍未啟動。';
+  }).catch(error => {
+    restoring = false;
+    draftStatus.textContent = `規則草稿讀取失敗：${error.message || error}`;
+  });
   legacyStatus(detail, feature);
   const preview = appendBudgetPreview(detail);
   list.addEventListener('click', event => {
