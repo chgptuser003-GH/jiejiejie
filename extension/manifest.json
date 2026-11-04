@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CF 蝦皮營運助手（測試版）",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "description": "原版工具箱排版的臺灣店鋪助手，透過本機後端連接 Shopee Open Platform 沙盒。",
   "permissions": ["storage", "tabs"],
   "host_permissions": ["http://127.0.0.1:8787/*"],

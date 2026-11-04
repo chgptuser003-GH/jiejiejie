@@ -218,3 +218,8 @@ h1 { margin: 0; font-size: 18px; color: #273348; }
 .marketing-layout .shipping-picker { margin-top: 12px; }
 .shipping-automation[hidden], .shipping-picker[hidden] { display: none; }
 @media (max-width: 850px) { .marketing-form-grid { grid-template-columns: 1fr; } }
+.flash-layout { max-width: 650px; }
+.flash-status { padding: 12px; border: 1px solid #f5d49a; border-radius: 8px; background: #fff8e7; color: #a65e10; font-weight: 700; }
+.flash-current { display: flex; gap: 8px; align-items: center; margin: 12px 0; padding: 11px 13px; border: 1px solid #e1e6ed; border-radius: 7px; }
+.flash-current strong { color: #b9630e; }
+.flash-layout .shipping-actions { justify-content: flex-start; }

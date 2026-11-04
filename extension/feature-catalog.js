@@ -42,7 +42,7 @@ export const modules = [
   },
   {
     id: 'flash', name: '限時特賣', icon: '⚡', features: [
-      { id: 'flash-renew', name: '店鋪特賣自動續期', status: 'mapping', summary: '到期前讀取活動商品與價格，按規則建立下一期活動。', details: '需對照 ShopFlashSale API；舊版會先關閉舊活動，重建流程必須處理活動空窗。' },
+      { id: 'flash-renew', name: '店鋪特賣自動續期', status: 'mapping', summary: '到期前讀取活動商品與價格，按規則建立下一期活動。', details: '已對照原版彈窗的續期開關與狀態；ShopFlashSale 活動、商品、價格和排程端點尚未驗證。原版在賣家中心列表的刪除操作也尚未重建。' },
     ],
   },
   {

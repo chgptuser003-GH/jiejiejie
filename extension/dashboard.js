@@ -2404,6 +2404,29 @@ function appendMarketingGiftLayout(detail, feature) {
   legacyStatus(detail, feature);
 }
 
+function appendFlashLayout(detail, feature) {
+  const form = node('section', 'workflow-card legacy-layout flash-layout');
+  form.append(node('h3', '', '⚡ 限時特賣助手'));
+  const status = node('div', 'flash-status', '自動續期已停止');
+  status.id = 'status';
+  const actions = node('div', 'shipping-actions');
+  const start = node('button', 'run-button', '開啟自動續期');
+  start.id = 'topup'; start.type = 'button'; start.disabled = true;
+  const stop = node('button', 'run-button', '關閉自動續期');
+  stop.id = 'stop'; stop.type = 'button'; stop.disabled = true;
+  actions.append(start, stop);
+  const state = node('div', 'flash-current');
+  state.append(node('span', '', '當前狀態：'));
+  const value = node('strong', '', '已停止');
+  value.id = 'currentState';
+  state.append(value);
+  form.append(status, actions, state,
+    node('p', 'query-note', '續期需要讀取活動、商品、價格與庫存，在到期時可靠地建立下一期；官方端點及排程尚未通過沙盒驗證。'),
+    node('p', 'query-note', '原版另會在賣家中心限時特賣列表加入刪除操作；此功能尚未重建。'));
+  detail.append(form);
+  legacyStatus(detail, feature);
+}
+
 function renderFeature(feature) {
   activeFeature = feature;
   const detail = $('feature-detail');
@@ -2434,6 +2457,7 @@ function renderFeature(feature) {
     'marketing-bundle': appendMarketingBundleLayout,
     'marketing-discount': appendMarketingDiscountLayout,
     'marketing-gift': appendMarketingGiftLayout,
+    'flash-renew': appendFlashLayout,
   }[feature.id];
   if (legacyLayout) {
     legacyLayout(detail, feature);
@@ -2529,6 +2553,14 @@ function renderModule(module, preferredFeature) {
       node('span', '', feature.name));
     button.addEventListener('click', () => renderFeature(feature));
     nav.append(button);
+  }
+  if (module.id === 'products') {
+    const logistics = node('button', 'nav-link');
+    logistics.type = 'button';
+    logistics.append(node('span', 'nav-icon', '◇'), node('span', '', '物流設定'));
+    logistics.addEventListener('click', () => renderModule(
+      modules.find(item => item.id === 'shipping'), 'shipping-channels'));
+    nav.append(logistics);
   }
   renderFeature(features.find(item => item.id === preferredFeature) || features[0]);
 }
