@@ -1,10 +1,10 @@
-# 原版 6.9.9 與 CF 0.9.20：UI／API 對照驗收
+# 原版 6.9.9 與 CF 0.9.21：UI／API 對照驗收
 
 依據使用者提供的 `shopee插件助手 10.2.zip`，核對原版 `popup.html`、`dashboard.html`、`topup.html`、`shipping-console.html`、`marketing-console.html`、`product-management.html` 及其 JS；新版依據 `extension/`、`open-platform/` 與臺灣沙盒店鋪實測記錄。本文件只記錄可證實的狀態。「有欄位」不等於「功能可用」，也不代表版面逐像素一致。
 
 ## UI 對照
 
-| 畫面 | 原版 | CF 0.9.20 | 尚有差異 |
+| 畫面 | 原版 | CF 0.9.21 | 尚有差異 |
 |---|---|---|---|
 | 彈窗 | 7 個工具卡片、站點選擇、狀態；另有原作者帳號／授權系統 | 7 個工具卡片、TW 沙盒標籤、後端連線及授權狀態 | 工具卡片排版接近；原作者帳密系統未移植，改用 Shopee OAuth 和本機配對；多站點尚未做 |
 | 廣告控制台 | 12 個導航頁籤，專屬表單、任務進度和日誌 | 12 個導航入口均按原版主要分區重排；部分頁籤有真正沙盒工具 | 原版各頁複雜的彈窗、篩選互動、分區細節及表格尚未完整重建；不能宣稱像素一致 |
@@ -25,7 +25,7 @@
 | CPC 監控自動重開 | `monitor-target-ids`、`monitor-cpc-threshold`、`monitor-roi-type`、`monitor-budget`、`monitor-roi-target`、`monitor-rapid-boost`、`monitor-reopen-delay`、`btn-start-cpc-monitor`、`btn-stop-cpc-monitor` | 下方可查績效；監控排程和重開按鈕停用 |
 | 批量刪除廣告 | `delete-exclude-ids`、`delete-only-ids`、`btn-delete-all`、`btn-delete-by-ids` | 可按指定或排除商品 ID 只讀預覽最多 1000 個活動；批量刪除按鈕停用 |
 | 商品批量操作 | `product-ids`、`exclude-product-ids`、`product-operation-select`、`unlist-sales-max`、`relist-max-count`、`btn-execute-product-operation` | 操作類型切換會顯示對應欄位；下方商品查詢可用，批量寫入停用 |
-| 指定商品開廣告 | `manual-ids`、`manual-budget`、`manual-roi`、`manual-rapid-boost`、`btn-open-manual-roi`、`auto-ids`、`auto-budget`、`btn-open-auto-roi` | 原版批量按鈕停用；下方另有已實測的沙盒單件手動選品、auto 競價工具，語義與原版系統 ROI 仍須核對 |
+| 指定商品開廣告 | `manual-ids`、`manual-budget`、`manual-roi`、`manual-rapid-boost`、`btn-open-manual-roi`、`auto-ids`、`auto-budget`、`btn-open-auto-roi` | 上方自動 ROI 區按鈕可帶入下方最多 10 件的沙盒平台自動競價預覽；須核對在架與既有廣告，另行確認後才逐件建立並讀回。單件平台自動競價已實測，批量介面未實測；與原版系統 ROI 尚未證實等價。手動 ROI、加速推廣仍停用 |
 | 批量修改 ROI／預算 | `edit-roi-target`、`edit-roi-rapid-boost`、`edit-roi-exclude-ids`、`edit-roi-only-ids`、`btn-edit-roi-all`、`btn-edit-roi-by-ids`、`edit-budget-target`、`edit-budget-exclude-ids`、`edit-budget-only-ids`、`btn-edit-budget-all`、`btn-edit-budget-by-ids` | 上方預算與正數目標 ROAS 按鈕可按商品 ID 完整掃描、核對廣告，最多 10 活動帶入下方各自的安全預覽；僅 manual 競價可預覽 ROAS 修改。下方明確確認後才逐筆寫入及讀回。ROI=0 系統模式切換、加速推廣及 auto 競價 ROAS 修改未接通；批量介面未實測 |
 | 加速推廣控制 | `rapid-boost-mode`、`rapid-boost-ids`、`btn-enable-rapid-boost`、`btn-disable-rapid-boost` | 模式切換顯示 ID 欄位；寫入停用，官方 `enhanced_cpc` 尚未證實等於原版加速推廣 |
 | 重開廣告 | `reopen-manual-budget`、`reopen-manual-roi`、`reopen-manual-rapid-boost`、`reopen-manual-mode`、`reopen-manual-delay`、`reopen-manual-ids`、`btn-reopen-manual-ads`；系統 ROI 對應 `reopen-auto-*` 欄位 | 手動／系統兩區及模式、延時選項可檢視；刪除後重建流程停用 |

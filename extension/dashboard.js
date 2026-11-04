@@ -5,6 +5,7 @@ import { scanCampaignPages } from './campaign-scan.js';
 import { parseItemIds, selectBudgetCampaigns, selectDeletionCandidates, selectRoasCampaigns } from './campaign-selection.js';
 import { dateRangeFromPreset, matchesCampaignMetrics, matchesMetricConditions, summarizeDailyMetrics } from './ad-filter.js';
 import { classifyCampaignHealth } from './ad-health.js';
+import { selectAdCreationItems } from './ad-create-selection.js';
 
 const BASE = 'http://127.0.0.1:8787';
 const BUDGET_DRAFT_KEY = 'cfBudgetRulesDraftV1';
@@ -234,7 +235,7 @@ function appendManualAdTool(container) {
   const { panel, fields, output } = toolPanel('沙盒單件廣告試建',
     '只支援手動選品、平台自動競價的單件商品；此模式不設定目標 ROAS。先預覽，再明確確認建立。');
   const itemId = field(fields, '商品 ID', 'manual-item-id', { type: 'text', value: '' });
-  const budget = field(fields, '每日預算 TWD', 'manual-budget', { value: '85', min: '1', step: '0.01' });
+  const budget = field(fields, '每日預算 TWD', 'single-ad-budget', { value: '85', min: '1', step: '0.01' });
   const today = todayTaipei();
   const startDate = field(fields, '開始日期', 'manual-start-date', { type: 'date', value: today });
   const previewButton = node('button', 'run-button', '預覽建立');
@@ -245,15 +246,19 @@ function appendManualAdTool(container) {
   actions.append(previewButton, createButton);
   panel.append(actions, output);
   let prepared = null;
+  let previewVersion = 0;
   for (const input of [itemId, budget, startDate]) {
     input.addEventListener('input', () => {
+      previewVersion++;
       prepared = null;
       createButton.disabled = true;
     });
   }
   previewButton.addEventListener('click', async () => {
+    const version = ++previewVersion;
     prepared = null;
     createButton.disabled = true;
+    previewButton.disabled = true;
     output.className = 'output';
     try {
       const numericId = Number(itemId.value);
@@ -262,12 +267,10 @@ function appendManualAdTool(container) {
         throw new Error('請輸入有效的商品 ID。');
       }
       if (!Number.isFinite(dailyBudget) || dailyBudget <= 0) throw new Error('每日預算必須大於 0。');
-      const healthResponse = await fetch(`${BASE}/health`);
-      if (!healthResponse.ok) throw new Error('本機後端未就緒。');
-      const health = await healthResponse.json();
-      if (health.environment !== 'sandbox') throw new Error('只允許在沙盒店鋪建立測試廣告。');
+      const checked = await inspectBatchAdCreation(new Set([String(numericId)]));
+      if (version !== previewVersion) throw new Error('預覽期間輸入已改變，請重新預覽。');
       prepared = {
-        shopId: String(health.shopId), confirm: 'CREATE_SANDBOX_MANUAL_AD',
+        shopId: checked.shopId, confirm: 'CREATE_SANDBOX_MANUAL_AD',
         itemId: numericId, budget: dailyBudget, startDate: dateForApi(startDate.value),
         referenceId: crypto.randomUUID(),
       };
@@ -276,7 +279,7 @@ function appendManualAdTool(container) {
     } catch (error) {
       output.className = 'output error';
       output.textContent = error.message || String(error);
-    }
+    } finally { previewButton.disabled = false; }
   });
   createButton.addEventListener('click', async () => {
     if (!prepared) return;
@@ -284,18 +287,186 @@ function appendManualAdTool(container) {
     const request = prepared;
     prepared = null;
     createButton.disabled = true;
+    previewButton.disabled = true;
     output.className = 'output';
     output.textContent = '正在向 Shopee 沙盒送出建立請求…';
     let created;
     try {
+      const checked = await inspectBatchAdCreation(new Set([String(request.itemId)]));
+      if (checked.shopId !== request.shopId) throw new Error('目前沙盒店鋪已改變。');
       created = await api('/api/ads/manual', { method: 'POST', body: request });
     } catch (error) {
       output.className = 'output error';
       output.textContent = `建立未確認成功：${error.message || String(error)}\n請先查活動列表，避免重複送出。`;
       return;
-    }
+    } finally { previewButton.disabled = false; }
     output.textContent = `沙盒建立請求已完成。請到活動列表核對結果。\n${JSON.stringify(created.result, null, 2)}`;
     try { await loadShopOverview(); } catch { /* 建立結果不受概覽刷新影響。 */ }
+  });
+  container.append(panel);
+}
+
+async function inspectBatchAdCreation(ids) {
+  const healthResponse = await fetch(`${BASE}/health`);
+  if (!healthResponse.ok) throw new Error('本機後端未就緒。');
+  const health = await healthResponse.json();
+  if (health.environment !== 'sandbox') throw new Error('只允許在沙盒店鋪建立測試廣告。');
+  const items = [];
+  let offset = 0;
+  for (let page = 0; page < 10; page++) {
+    const result = await api(`/api/items?status=NORMAL&offset=${offset}&pageSize=100`);
+    if (!Array.isArray(result.item)) throw new Error('在架商品清單格式不正確。');
+    items.push(...result.item);
+    if ([...ids].every(id => items.some(item => String(item.item_id) === id))) break;
+    if (!result.has_next_page) break;
+    if (!result.item.length) throw new Error('在架商品分頁資料不完整。');
+    offset += result.item.length;
+  }
+  const settings = [];
+  const scan = await scanCampaignPages({
+    maxPages: 10, pageSize: 100,
+    fetchPage: ({ offset: adOffset, limit }) => api(`/api/ads?type=all&limit=${limit}&offset=${adOffset}`),
+    onPage: async campaigns => {
+      if (!campaigns.length) return;
+      const campaignIds = campaigns.map(item => String(item.campaign_id));
+      const result = await api(`/api/ads/settings?ids=${encodeURIComponent(campaignIds.join(','))}`);
+      const byId = new Map((result.campaign_list || []).map(item => [String(item.campaign_id), item]));
+      if (campaignIds.some(id => !byId.has(id))) {
+        throw new Error('部分廣告活動設定未回傳，不能可靠排除重複投放。');
+      }
+      settings.push(...campaignIds.map(id => byId.get(id)));
+    },
+  });
+  return { shopId: String(health.shopId),
+    items: selectAdCreationItems(items, settings, ids, scan.complete), scannedAds: scan.scanned };
+}
+
+function appendBatchAutoAdTool(container) {
+  const { panel, fields, output } = toolPanel('沙盒批量平台自動競價試建',
+    '與原版「系統 ROI」尚未證實等價。一次最多 10 件在架商品；先排除已有廣告，再逐件建立與讀回，出錯即停。');
+  const idsInput = field(fields, '商品 ID（逗號或空格分隔）', 'batch-auto-ad-ids', { type: 'text' });
+  const budgetInput = field(fields, '每日預算 TWD', 'batch-auto-ad-budget', { value: '85', min: '1', step: '0.01' });
+  const dateInput = field(fields, '開始日期', 'batch-auto-ad-start-date', { type: 'date', value: todayTaipei() });
+  const previewButton = node('button', 'run-button', '預覽批量建立');
+  const createButton = node('button', 'run-button', '確認在沙盒逐件建立');
+  const stopButton = node('button', 'run-button', '完成目前商品後停止');
+  const logButton = node('button', 'run-button', '查看上次執行記錄');
+  previewButton.id = 'batch-auto-ad-preview';
+  for (const button of [previewButton, createButton, stopButton, logButton]) button.type = 'button';
+  createButton.disabled = stopButton.disabled = true;
+  const actions = node('div', 'tool-actions');
+  actions.append(previewButton, createButton, stopButton, logButton);
+  panel.append(actions, output);
+  let prepared = null;
+  let version = 0;
+  let stopRequested = false;
+  for (const input of [idsInput, budgetInput, dateInput]) {
+    input.addEventListener('input', () => { version++; prepared = null; createButton.disabled = true; });
+  }
+  previewButton.addEventListener('click', async () => {
+    const currentVersion = ++version;
+    prepared = null;
+    createButton.disabled = previewButton.disabled = true;
+    output.className = 'output';
+    output.textContent = '正在核對在架商品與既有廣告…';
+    try {
+      const ids = parseItemIds(idsInput.value, { required: true });
+      if (ids.size > 10) throw new Error('一次最多建立 10 件商品的測試廣告。');
+      const budget = Number(budgetInput.value);
+      if (budgetInput.value.trim() === '' || !Number.isFinite(budget) || budget <= 0) {
+        throw new Error('每日預算必須大於 0。');
+      }
+      const startDate = dateForApi(dateInput.value);
+      const checked = await inspectBatchAdCreation(ids);
+      if (currentVersion !== version) throw new Error('預覽期間輸入已改變，請重新預覽。');
+      prepared = { shopId: checked.shopId, budget, startDate,
+        requests: checked.items.map(item => ({ shopId: checked.shopId,
+          confirm: 'CREATE_SANDBOX_MANUAL_AD', itemId: Number(item.item_id), budget,
+          startDate, referenceId: crypto.randomUUID() })) };
+      table(output, ['商品 ID', '狀態', '每日預算 TWD', '開始日期'], checked.items.map(item =>
+        [item.item_id, item.item_status, budget, dateInput.value]));
+      output.prepend(node('p', 'query-summary',
+        `沙盒店鋪 ${checked.shopId}；已完整核對 ${checked.scannedAds} 個既有廣告。${checked.items.length} 件待建立；尚未送出請求。`));
+      createButton.disabled = false;
+    } catch (error) {
+      output.className = 'output error';
+      output.textContent = error.message || String(error);
+    } finally { previewButton.disabled = false; }
+  });
+  createButton.addEventListener('click', async () => {
+    if (!prepared?.requests.length) return;
+    if (!window.confirm(`確認在沙盒店鋪 ${prepared.shopId} 為 ${prepared.requests.length} 件商品逐件建立每日預算 TWD ${prepared.budget} 的測試廣告？`)) return;
+    const batch = prepared;
+    prepared = null;
+    createButton.disabled = previewButton.disabled = true;
+    stopButton.disabled = false;
+    stopRequested = false;
+    const run = { startedAt: new Date().toISOString(), shopId: batch.shopId,
+      entries: batch.requests.map(request => ({ itemId: request.itemId,
+        referenceId: request.referenceId, status: 'pending' })) };
+    const persist = () => chrome.storage.local.set({ lastBatchAutoAdRun: run });
+    const showProgress = () => {
+      output.textContent = `沙盒批量建廣告：${run.entries.filter(entry => entry.status === 'verified').length}／${run.entries.length} 已讀回確認。\n`
+        + run.entries.map(entry => `商品 ${entry.itemId}: ${entry.status}${entry.campaignId ? ` · 活動 ${entry.campaignId}` : ''}${entry.message ? ` · ${entry.message}` : ''}`).join('\n');
+    };
+    try {
+      await persist();
+      const current = await inspectBatchAdCreation(new Set(batch.requests.map(item => String(item.itemId))));
+      if (current.shopId !== batch.shopId) throw new Error('目前沙盒店鋪已改變。');
+      for (let index = 0; index < batch.requests.length; index++) {
+        if (stopRequested) break;
+        const request = batch.requests[index];
+        const entry = run.entries[index];
+        entry.status = 'sending';
+        await persist();
+        showProgress();
+        try {
+          const created = await api('/api/ads/manual', { method: 'POST', body: request });
+          entry.status = 'accepted';
+          await persist();
+          const campaignId = Number(created.result?.campaign_id);
+          if (!Number.isSafeInteger(campaignId) || campaignId <= 0) {
+            throw new Error('建立請求已接受，但沒有可讀回的活動 ID；請人工核對。');
+          }
+          entry.campaignId = campaignId;
+          const settings = await api(`/api/ads/settings?ids=${campaignId}`);
+          const campaign = (settings.campaign_list || []).find(item => Number(item.campaign_id) === campaignId);
+          if (!campaign?.common_info?.item_id_list?.some(id => Number(id) === request.itemId)) {
+            throw new Error('新活動尚未讀回商品關聯；請人工核對。');
+          }
+          entry.status = 'verified';
+        } catch (error) {
+          entry.status = 'needs_review';
+          entry.message = error.message || String(error);
+          stopRequested = true;
+        }
+        await persist();
+        showProgress();
+      }
+      for (const entry of run.entries) if (entry.status === 'pending') entry.status = 'not_sent';
+      run.finishedAt = new Date().toISOString();
+      await persist();
+      showProgress();
+    } catch (error) {
+      for (const entry of run.entries) if (entry.status === 'pending') entry.status = 'not_sent';
+      run.error = error.message || String(error);
+      await persist();
+      output.className = 'output error';
+      output.textContent = `批量任務未繼續：${run.error}\n請核對記錄。`;
+    } finally {
+      stopButton.disabled = true;
+      previewButton.disabled = false;
+      stopRequested = false;
+    }
+    try { await loadShopOverview(); } catch { /* 建立記錄不受概覽刷新影響。 */ }
+  });
+  stopButton.addEventListener('click', () => { stopRequested = true; stopButton.disabled = true; });
+  logButton.addEventListener('click', async () => {
+    const { lastBatchAutoAdRun } = await chrome.storage.local.get('lastBatchAutoAdRun');
+    output.textContent = lastBatchAutoAdRun
+      ? `上次批量建廣告記錄（${lastBatchAutoAdRun.startedAt}）：\n`
+        + lastBatchAutoAdRun.entries.map(entry => `商品 ${entry.itemId}: ${entry.status}${entry.campaignId ? ` · 活動 ${entry.campaignId}` : ''}${entry.message ? ` · ${entry.message}` : ''}`).join('\n')
+      : '尚無批量建廣告記錄。';
   });
   container.append(panel);
 }
@@ -1406,10 +1577,52 @@ function appendSpecificAdsLayout(detail, feature) {
   form.append(legacyControl('每日預算 TWD', 'auto-budget', {
     kind: 'number', value: '85', min: '40', help: '原版系統 ROI 也需要每日預算。',
   }).wrapper);
+  form.append(node('p', 'group-intro', '目前接入的是已實測的手動選品、平台自動競價 API；與原版「系統 ROI」是否等價仍待核對。'));
   form.append(legacyAction('🤖 開啟系統 ROI 廣告', '為指定商品建立系統自動最佳化廣告。', '開啟廣告', 'btn-open-auto-roi', 'secondary'));
   detail.append(form);
   legacyStatus(detail, feature);
   appendManualAdTool(detail);
+  appendBatchAutoAdTool(detail);
+  const status = node('div', 'output', '上方輸入商品 ID 後，可先核對在架商品及既有廣告，再送往下方批量安全預覽。');
+  form.append(status);
+  const upperButton = form.querySelector('#btn-open-auto-roi');
+  const lowerIds = $('batch-auto-ad-ids');
+  const lowerBudget = $('batch-auto-ad-budget');
+  const lowerPreview = $('batch-auto-ad-preview');
+  for (const id of ['auto-ids', 'auto-budget']) {
+    $(id).addEventListener('input', () => {
+      lowerIds.value = '';
+      lowerIds.dispatchEvent(new Event('input', { bubbles: true }));
+      status.className = 'output';
+      status.textContent = '上方條件已改變；請重新產生建立預覽。';
+    });
+  }
+  upperButton.disabled = false;
+  upperButton.textContent = '預覽平台自動競價廣告';
+  upperButton.title = '只讀核對後帶入下方安全預覽；不會直接建立廣告';
+  upperButton.addEventListener('click', () => {
+    try {
+      if (lowerPreview.disabled) throw new Error('下方批量任務正在執行，請等待完成。');
+      const ids = parseItemIds($('auto-ids').value, { required: true });
+      if (ids.size > 10) throw new Error('一次最多預覽 10 件商品。');
+      const budgetInput = $('auto-budget');
+      const budget = Number(budgetInput.value);
+      if (budgetInput.value.trim() === '' || !Number.isFinite(budget) || budget <= 0) {
+        throw new Error('每日預算必須大於 0。');
+      }
+      lowerIds.value = [...ids].join(' ');
+      lowerIds.dispatchEvent(new Event('input', { bubbles: true }));
+      lowerBudget.value = String(budget);
+      lowerBudget.dispatchEvent(new Event('input', { bubbles: true }));
+      lowerPreview.click();
+      status.className = 'output';
+      status.textContent = '下方正在核對商品及既有廣告；尚未送出建立請求。';
+      lowerPreview.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (error) {
+      status.className = 'output error';
+      status.textContent = error.message || String(error);
+    }
+  });
 }
 
 function appendRoiBudgetColumn(title, prefix) {
